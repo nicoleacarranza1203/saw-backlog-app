@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saw Cutting Backlog</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f5f5f5;color:#1a1a1a;font-size:14px;}
+    .app{max-width:900px;margin:0 auto;padding:16px;}
+    h1{font-size:18px;font-weight:600;margin-bottom:16px;}
+    .tab-bar{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #e0e0e0;}
+    .tab{padding:8px 16px;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-left:none;border-right:none;border-top:none;font-family:inherit;}
+    .tab.active{color:#1a1a1a;font-weight:500;border-bottom:2px solid #1a1a1a;}
+    .section{display:none;}.section.active{display:block;}
+    .card{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+    .card-sm{background:#f9f9f9;border-radius:8px;padding:12px 14px;margin-bottom:8px;}
+    .card-sm.rush{border-left:3px solid #E24B4A;border-radius:0 8px 8px 0;}
+    .badge{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:20px;}
+    .badge-queue{background:#FEF3C7;color:#92400E;}
+    .badge-cutting{background:#DBEAFE;color:#1E40AF;}
+    .badge-done{background:#D1FAE5;color:#065F46;}
+    .badge-hold{background:#FEE2E2;color:#991B1B;}
+    .badge-rush{background:#FCEBEB;color:#A32D2D;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;border:1px solid #F09595;}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;}
+    .metric{background:#f9f9f9;border-radius:8px;padding:12px;}
+    .metric-label{font-size:11px;color:#666;margin-bottom:4px;}
+    .metric-val{font-size:22px;font-weight:500;}
+    .metric-val.warn{color:#B45309;}
+    .metric-val.ok{color:#065F46;}
+    .metric-val.rush{color:#A32D2D;}
+    .saw-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f0f0f0;}
+    .saw-row:last-child{border-bottom:none;}
+    .saw-name{font-weight:500;font-size:13px;min-width:90px;}
+    .bar-track{flex:1;height:8px;background:#e5e5e5;border-radius:4px;overflow:hidden;}
+    .bar-fill{height:100%;border-radius:4px;transition:width 0.4s;}
+    .bar-fill.low{background:#1D9E75;}
+    .bar-fill.mid{background:#BA7517;}
+    .bar-fill.high{background:#E24B4A;}
+    .prog-track{flex:1;height:6px;background:#e5e5e5;border-radius:4px;overflow:hidden;}
+    .prog-fill{height:100%;border-radius:4px;transition:width 0.3s;}
+    .job-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}
+    .job-table th{text-align:left;font-weight:500;font-size:11px;color:#666;padding:6px 8px;border-bottom:1px solid #e5e5e5;}
+    .job-table td{padding:8px;border-bottom:1px solid #f0f0f0;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .job-table tr:last-child td{border-bottom:none;}
+    .job-table tr:hover td{background:#fafafa;}
+    .job-table tr.rush-row td{background:#FFF8F8;}
+    select,input[type=text],input[type=number]{width:100%;padding:7px 10px;font-size:13px;border:1px solid #d0d0d0;border-radius:6px;background:#fff;color:#1a1a1a;font-family:inherit;}
+    select:focus,input:focus{outline:none;border-color:#999;}
+    label{font-size:12px;color:#666;display:block;margin-bottom:4px;margin-top:10px;}
+    label:first-child{margin-top:0;}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+    .form-grid .span2{grid-column:span 2;}
+    .btn{padding:8px 16px;font-size:13px;border:1px solid #d0d0d0;border-radius:6px;cursor:pointer;background:none;color:#1a1a1a;font-family:inherit;}
+    .btn:hover{background:#f5f5f5;}
+    .btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+    .btn-primary:hover{opacity:0.88;}
+    .btn-danger{color:#991B1B;border-color:#FECACA;}
+    .btn-danger:hover{background:#FEE2E2;}
+    .btn-rush{color:#A32D2D;border-color:#F09595;font-size:12px;padding:4px 10px;}
+    .btn-rush.active-rush{background:#FCEBEB;}
+    .btn-rush:hover{background:#FCEBEB;}
+    .btn-complete{background:#065F46;color:#fff;border-color:#065F46;font-size:13px;padding:8px 18px;font-weight:500;}
+    .btn-complete:hover{opacity:0.88;}
+    .empty{text-align:center;padding:28px;color:#999;font-size:13px;}
+    .status-btns{display:flex;gap:6px;flex-wrap:wrap;}
+    .status-btn{padding:5px 11px;font-size:12px;border:1px solid #e0e0e0;border-radius:20px;cursor:pointer;background:none;color:#666;font-family:inherit;}
+    .status-btn:hover{background:#f5f5f5;}
+    .status-btn.sel-queue{background:#FEF3C7;color:#92400E;border-color:#FCD34D;}
+    .status-btn.sel-cutting{background:#DBEAFE;color:#1E40AF;border-color:#93C5FD;}
+    .status-btn.sel-done{background:#D1FAE5;color:#065F46;border-color:#6EE7B7;}
+    .status-btn.sel-hold{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
+    .rush-toggle{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #F09595;border-radius:6px;background:#FFF8F8;cursor:pointer;font-size:13px;color:#A32D2D;font-family:inherit;margin-top:10px;width:100%;}
+    .rush-toggle input{width:16px;height:16px;accent-color:#E24B4A;cursor:pointer;flex-shrink:0;}
+    .history-row{display:grid;grid-template-columns:90px 90px 1fr 70px 70px;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:12px;align-items:center;}
+    .history-row:last-child{border-bottom:none;}
+    .history-head{font-weight:500;font-size:11px;color:#666;}
+    .progress-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #ebebeb;}
+    .progress-label{font-size:12px;color:#666;white-space:nowrap;}
+    .prog-select{width:auto;min-width:110px;padding:4px 8px;font-size:12px;}
+    .loading{text-align:center;padding:40px;color:#999;}
+    @media(max-width:600px){
+      .metric-grid{grid-template-columns:repeat(2,1fr);}
+      .form-grid{grid-template-columns:1fr;}
+      .form-grid .span2{grid-column:span 1;}
+      .history-row{grid-template-columns:80px 70px 1fr 60px;}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>⚙️ Saw Cutting Backlog</h1>
+
+  <div class="tab-bar">
+    <button class="tab active" onclick="showTab('dashboard',event)">Sales dashboard</button>
+    <button class="tab" onclick="showTab('operator',event)">Operator input</button>
+    <button class="tab" onclick="showTab('history',event)">Daily summary</button>
+  </div>
+
+  <div id="tab-dashboard" class="section active">
+    <div class="metric-grid" id="metrics"><div class="loading">Loading...</div></div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-weight:500;font-size:13px;">Backlog by saw</span>
+        <span style="font-size:11px;color:#666;" id="last-updated"></span>
+      </div>
+      <div id="saw-bars"></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-weight:500;font-size:13px;">All active jobs</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#666;margin:0;cursor:pointer;">
+            <input type="checkbox" id="rush-only" onchange="renderDashboard()" style="accent-color:#E24B4A;width:13px;height:13px;"> Rush only
+          </label>
+          <select id="dash-filter" style="width:auto;padding:4px 8px;font-size:12px;" onchange="renderDashboard()">
+            <option value="">All saws</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="job-table">
+          <colgroup><col style="width:14px"><col style="width:80px"><col style="width:75px"><col style="width:95px"><col style="width:85px"><col style="width:40px"><col style="width:48px"><col style="width:95px"><col style="width:62px"><col style="width:38px"><col style="width:38px"></colgroup>
+          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>SP</th><th>Op</th></tr></thead>
+          <tbody id="dash-jobs"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-operator" class="section">
+    <div class="card">
+      <div style="font-weight:500;font-size:13px;margin-bottom:12px;">Add new job to queue</div>
+      <div class="form-grid">
+        <div><label>Order #</label><input type="text" id="f-order" placeholder="e.g. SO-4821"></div>
+        <div><label>Saw</label><select id="f-saw"></select></div>
+        <div><label>Customer</label><input type="text" id="f-customer" placeholder="Customer name"></div>
+        <div><label>Material & size</label><input type="text" id="f-material" placeholder='e.g. 1" RD HR'></div>
+        <div><label>Qty</label><input type="number" id="f-qty" placeholder="pcs" min="1"></div>
+        <div><label>Length</label><input type="text" id="f-length" placeholder='e.g. 24"'></div>
+        <div><label>Est. cut time (min)</label><input type="number" id="f-time" placeholder="min" min="1"></div>
+        <div><label>Due date</label><input type="text" id="f-due" placeholder="MM/DD"></div>
+        <div>
+          <label>Salesperson</label>
+          <select id="f-salesperson">
+            <option value="">Select...</option>
+            <option>NC</option><option>HM</option><option>MT</option><option>MR</option>
+            <option>IC</option><option>HK</option><option>TD</option><option>TS</option>
+            <option value="__custom_sp__">Other (type below)</option>
+          </select>
+          <input type="text" id="f-salesperson-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
+        </div>
+        <div>
+          <label>Operator</label>
+          <select id="f-operator">
+            <option value="">Select...</option>
+            <option>EG</option><option>MM</option><option>ELG</option>
+            <option value="__custom_op__">Other (type below)</option>
+          </select>
+          <input type="text" id="f-operator-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
+        </div>
+        <div class="span2"><label>Special instructions</label><input type="text" id="f-notes" placeholder="Tolerance, finish, hold for inspection, etc."></div>
+        <div class="span2">
+          <label class="rush-toggle">
+            <input type="checkbox" id="f-rush">
+            <span>Mark as rush order — sorted to top of queue</span>
+          </label>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-primary" onclick="addJob()">Add to queue</button>
+        <button class="btn" onclick="clearForm()">Clear</button>
+      </div>
+      <div id="form-msg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:500;font-size:13px;margin-bottom:10px;">Update job status</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:12px;color:#666;">Saw:</span>
+        <div id="saw-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="op-jobs"></div>
+    </div>
+  </div>
+
+  <div id="tab-history" class="section">
+    <div class="card">
+      <div style="font-weight:500;font-size:13px;margin-bottom:4px;">Today's completed jobs</div>
+      <div style="font-size:12px;color:#666;margin-bottom:14px;" id="hist-date"></div>
+      <div class="metric-grid" id="hist-metrics" style="grid-template-columns:repeat(3,minmax(0,1fr));"></div>
+      <div>
+        <div class="history-row history-head"><span>Order #</span><span>Saw</span><span>Customer / Material</span><span>Cut time</span><span>Completed</span></div>
+        <div id="hist-rows"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-weight:500;font-size:13px;margin-bottom:10px;">Queue & active jobs</div>
+      <div id="hist-active"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// =============================================
+// PASTE YOUR FIREBASE CONFIG HERE
+// =============================================
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+// =============================================
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const jobsRef = collection(db, 'jobs');
+
+const SAWS = ['Coldsaw','Hyd-Mech','Hemsaw','Chop saw'];
+const MAX_MIN = 480;
+const PROG_OPTS = [0,25,50,75,100];
+let jobs = [];
+let opSawFilter = 'all';
+
+function uid(){return 'j'+Date.now()+Math.floor(Math.random()*999);}
+
+function sortJobs(arr){
+  return arr.slice().sort((a,b)=>{
+    if(a.rush!==b.rush) return a.rush?-1:1;
+    if(a.status==='cutting'&&b.status!=='cutting') return -1;
+    if(b.status==='cutting'&&a.status!=='cutting') return 1;
+    return 0;
+  });
+}
+
+function statusBadge(s){
+  const map={queued:'badge-queue',cutting:'badge-cutting',done:'badge-done',hold:'badge-hold'};
+  const lbl={queued:'Queued',cutting:'Cutting',done:'Done',hold:'On hold'};
+  return `<span class="badge ${map[s]||''}">${lbl[s]||s}</span>`;
+}
+
+function rushBadge(){return `<span class="badge-rush">Rush</span>`;}
+
+function progBar(pct){
+  const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
+  return `<div style="display:flex;align-items:center;gap:6px;">
+    <div class="prog-track"><div class="prog-fill" style="width:${pct}%;background:${color};"></div></div>
+    <span style="font-size:11px;color:#666;min-width:28px;">${pct}%</span>
+  </div>`;
+}
+
+function totalMins(sawName,statuses){
+  return jobs.filter(j=>(!sawName||j.saw===sawName)&&statuses.includes(j.status)).reduce((a,j)=>a+Number(j.time||0),0);
+}
+
+function renderDashboard(){
+  const now=new Date();
+  document.getElementById('last-updated').textContent='Updated '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const active=jobs.filter(j=>j.status!=='done');
+  const cutting=jobs.filter(j=>j.status==='cutting');
+  const queued=jobs.filter(j=>j.status==='queued');  const rushActive=jobs.filter(j=>j.rush&&j.status!=='done');
+  const totalBacklog=jobs.filter(j=>['queued','cutting','hold'].includes(j.status)).reduce((a,j)=>a+Number(j.time||0),0);
+  document.getElementById('metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Active jobs</div><div class="metric-val">${active.length}</div></div>
+    <div class="metric"><div class="metric-label">Currently cutting</div><div class="metric-val ok">${cutting.length}</div></div>
+    <div class="metric"><div class="metric-label">In queue</div><div class="metric-val">${queued.length}</div></div>
+    <div class="metric"><div class="metric-label">Rush orders</div><div class="metric-val ${rushActive.length?'rush':''}">${rushActive.length}</div></div>
+  `;
+  document.getElementById('saw-bars').innerHTML=SAWS.map(s=>{
+    const mins=totalMins(s,['queued','cutting','hold']);
+    const pct=Math.min(100,Math.round(mins/MAX_MIN*100));
+    const cls=pct<40?'low':pct<75?'mid':'high';
+    const cj=jobs.filter(j=>j.saw===s&&j.status==='cutting');
+    const rj=jobs.filter(j=>j.saw===s&&j.rush&&j.status!=='done');
+    const nowCutting=cj.length?`<span style="font-size:11px;color:#666;margin-left:4px;">cutting: ${cj.map(j=>j.order+(j.pct>0?' ('+j.pct+'%)':'')).join(', ')}</span>`:`<span style="font-size:11px;color:#aaa;margin-left:4px;">idle</span>`;
+    const rushPip=rj.length?`<span class="badge-rush" style="margin-left:4px;">${rj.length} rush</span>`:'';
+    return `<div class="saw-row"><span class="saw-name">${s}</span><div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div><span style="font-size:12px;min-width:52px;text-align:right;color:#666;">${Math.round(mins)} min</span>${nowCutting}${rushPip}</div>`;
+  }).join('');
+  const filterSel=document.getElementById('dash-filter');
+  const cur=filterSel.value;
+  filterSel.innerHTML='<option value="">All saws</option>'+SAWS.map(s=>`<option ${s===cur?'selected':''}>${s}</option>`).join('');
+  const filterVal=document.getElementById('dash-filter').value;
+  const rushOnly=document.getElementById('rush-only').checked;
+  let visible=jobs.filter(j=>j.status!=='done'&&(!filterVal||j.saw===filterVal)&&(!rushOnly||j.rush));
+  visible=sortJobs(visible);
+  const tbody=document.getElementById('dash-jobs');
+  if(!visible.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">No active jobs</td></tr>`;return;}
+  tbody.innerHTML=visible.map(j=>`
+    <tr class="${j.rush?'rush-row':''}">
+      <td style="padding:8px 4px;">${j.rush?`<div style="width:3px;height:20px;background:#E24B4A;border-radius:2px;"></div>`:''}</td>
+      <td style="font-weight:500;">${j.order}${j.rush?' '+rushBadge():''}</td>
+      <td>${j.saw}</td><td>${j.customer}</td>
+      <td>${j.material}${j.length?' · '+j.length:''}</td>
+      <td>${j.qty||'—'}</td><td>${j.due||'—'}</td>
+      <td>${progBar(j.pct||0)}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td style="font-size:11px;color:#666;">${j.salesperson||'—'}</td>
+      <td style="font-size:11px;color:#666;">${j.operator||'—'}</td>
+    </tr>`).join('');
+}
+
+function renderOperator(){
+  const sawSel=document.getElementById('f-saw');
+  if(!sawSel.options.length) SAWS.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;sawSel.appendChild(o);});
+  const fbDiv=document.getElementById('saw-filter-btns');
+  fbDiv.innerHTML=`<button class="btn ${opSawFilter==='all'?'btn-primary':''}" style="font-size:12px;padding:4px 10px;" onclick="window.setSawFilter('all')">All</button>`
+    +SAWS.map(s=>`<button class="btn ${opSawFilter===s?'btn-primary':''}" style="font-size:12px;padding:4px 10px;" onclick="window.setSawFilter('${s}')">${s}</button>`).join('');
+  let visible=jobs.filter(j=>j.status!=='done'&&(opSawFilter==='all'||j.saw===opSawFilter));
+  visible=sortJobs(visible);
+  const el=document.getElementById('op-jobs');
+  if(!visible.length){el.innerHTML=`<div class="empty">No active jobs${opSawFilter!=='all'?' for '+opSawFilter:''}</div>`;return;}
+  el.innerHTML=visible.map(j=>{
+    const pct=j.pct||0;
+    const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
+    return `<div class="card-sm ${j.rush?'rush':''}" id="card-${j.docId}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-weight:500;">${j.order}</span>
+          ${j.rush?rushBadge():''}
+          <span style="color:#666;font-size:12px;">${j.saw}</span>
+          ${j.notes?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px;">${j.notes}</span>`:''}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+          <button class="btn btn-rush ${j.rush?'active-rush':''}" onclick="window.toggleRush('${j.docId}')">${j.rush?'Remove rush':'Mark rush'}</button>
+          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeJob('${j.docId}')">Remove</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#666;margin-bottom:10px;">
+        ${j.customer} &nbsp;·&nbsp; ${j.material}${j.length?' '+j.length:''} &nbsp;·&nbsp; ${j.qty||'?'} pcs &nbsp;·&nbsp; Due ${j.due||'—'} &nbsp;·&nbsp; ~${j.time} min
+        ${j.salesperson||j.operator?`<span style="margin-left:6px;color:#aaa;">|</span>`:''}
+        ${j.salesperson?`<span style="margin-left:6px;">SP: <strong>${j.salesperson}</strong></span>`:''}
+        ${j.operator?`<span style="margin-left:6px;">Op: <strong>${j.operator}</strong></span>`:''}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div class="status-btns">
+          <button class="status-btn ${j.status==='queued'?'sel-queue':''}" onclick="window.setStatus('${j.docId}','queued')">Queued</button>
+          <button class="status-btn ${j.status==='cutting'?'sel-cutting':''}" onclick="window.setStatus('${j.docId}','cutting')">Cutting</button>
+          <button class="status-btn ${j.status==='hold'?'sel-hold':''}" onclick="window.setStatus('${j.docId}','hold')">On hold</button>
+        </div>
+        <button class="btn btn-complete" onclick="window.completeJob('${j.docId}')">✓ Complete</button>
+      </div>
+      <div class="progress-row">
+        <span class="progress-label">% Complete:</span>
+        <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
+          ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
+        </select>
+        <div style="flex:1;">${progBar(pct)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function getLastBusinessDayStart(){
+  const now=new Date();
+  const d=new Date(now.getFullYear(),now.getMonth(),now.getDate(),0,0,0,0);
+  // if today is Mon, go back to Fri; if Sun, go back to Fri; else go back 1 day for prev business day start
+  // but we want TODAY's business day start (midnight today), not previous
+  // Mon=1,Tue=2,Wed=3,Thu=4,Fri=5,Sat=6,Sun=0
+  const day=d.getDay();
+  if(day===0) d.setDate(d.getDate()-2); // Sun -> Fri
+  else if(day===6) d.setDate(d.getDate()-1); // Sat -> Fri
+  // else it's a weekday — use today's midnight
+  return d.getTime();
+}
+
+function renderHistory(){
+  const today=new Date();
+  document.getElementById('hist-date').textContent=today.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  const bizDayStart=getLastBusinessDayStart();
+  const done=jobs.filter(j=>j.status==='done'&&j.completedAt&&j.completedAt>=bizDayStart);
+  const totalTime=done.reduce((a,j)=>a+Number(j.time||0),0);
+  const rushDone=done.filter(j=>j.rush).length;
+  document.getElementById('hist-metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Completed today</div><div class="metric-val ok">${done.length}</div></div>
+    <div class="metric"><div class="metric-label">Total cut time</div><div class="metric-val">${Math.round(totalTime)} min</div></div>
+    <div class="metric"><div class="metric-label">Rush completed</div><div class="metric-val">${rushDone}</div></div>
+  `;
+  const rows=document.getElementById('hist-rows');
+  if(!done.length){rows.innerHTML=`<div class="empty">No completed jobs yet today</div>`;return;}
+  rows.innerHTML=done.map(j=>`
+    <div class="history-row">
+      <span style="font-weight:500;">${j.order}${j.rush?' '+rushBadge():''}</span>
+      <span>${j.saw}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.customer} · ${j.material}</span>
+      <span>${Math.round(j.time)} min</span>
+      <span style="color:#666;">${j.completedAt?new Date(j.completedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'-'}</span>
+    </div>
+    <div style="font-size:11px;color:#aaa;padding:0 0 6px 2px;">
+      ${j.salesperson?`SP: ${j.salesperson}`:''} ${j.operator?`· Op: ${j.operator}`:''}
+    </div>`).join('');
+  const active=jobs.filter(j=>j.status!=='done');
+  const ha=document.getElementById('hist-active');
+  if(!active.length){ha.innerHTML=`<div class="empty">All jobs complete</div>`;return;}
+  ha.innerHTML=`<table class="job-table"><colgroup><col style="width:100px"><col style="width:88px"><col style="width:1fr"><col style="width:70px"><col style="width:75px"></colgroup>
+    <thead><tr><th>Order #</th><th>Saw</th><th>Customer / Material</th><th>Est. time</th><th>Status</th></tr></thead>
+    <tbody>${sortJobs(active).map(j=>`<tr class="${j.rush?'rush-row':''}"><td style="font-weight:500;">${j.order}${j.rush?' '+rushBadge():''}</td><td>${j.saw}</td><td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.customer} · ${j.material}</td><td>${Math.round(j.time)} min</td><td>${statusBadge(j.status)}</td></tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderAll(){renderDashboard();renderOperator();renderHistory();}
+
+window.showTab=function(t,e){
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if(e&&e.target)e.target.classList.add('active');
+  renderAll();
+};
+
+window.setSawFilter=function(s){opSawFilter=s;renderOperator();};
+
+window.setStatus=async function(docId,status){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j)return;
+  const updates={status};
+  if(status==='done'){updates.completedAt=Date.now();updates.pct=100;}
+  if(status==='queued'&&j.pct===100)updates.pct=0;
+  await updateDoc(doc(db,'jobs',docId),updates);
+};
+
+window.setPct=async function(docId,val){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j)return;
+  const updates={pct:Number(val)};
+  if(Number(val)>0&&Number(val)<100&&j.status==='queued')updates.status='cutting';
+  if(Number(val)===100){updates.status='done';updates.completedAt=Date.now();}
+  await updateDoc(doc(db,'jobs',docId),updates);
+};
+
+window.completeJob=async function(docId){
+  await updateDoc(doc(db,'jobs',docId),{status:'done',pct:100,completedAt:Date.now()});
+};
+
+window.toggleRush=async function(docId){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j)return;
+  await updateDoc(doc(db,'jobs',docId),{rush:!j.rush});
+};
+
+window.removeJob=async function(docId){
+  await deleteDoc(doc(db,'jobs',docId));
+};
+
+window.addJob=async function(){
+  const order=document.getElementById('f-order').value.trim();
+  const saw=document.getElementById('f-saw').value;
+  const customer=document.getElementById('f-customer').value.trim();
+  const material=document.getElementById('f-material').value.trim();
+  const qty=document.getElementById('f-qty').value;
+  const length=document.getElementById('f-length').value.trim();
+  const time=document.getElementById('f-time').value;
+  const due=document.getElementById('f-due').value.trim();
+  const notes=document.getElementById('f-notes').value.trim();
+  const rush=document.getElementById('f-rush').checked;
+  const spSel=document.getElementById('f-salesperson').value;
+  const salesperson=spSel==='__custom_sp__'?document.getElementById('f-salesperson-custom').value.trim():spSel;
+  const opSel=document.getElementById('f-operator').value;
+  const operator=opSel==='__custom_op__'?document.getElementById('f-operator-custom').value.trim():opSel;
+  if(!order||!customer||!material||!time){
+    const msg=document.getElementById('form-msg');
+    msg.style.color='#991B1B';
+    msg.textContent='Please fill in order #, customer, material, and cut time.';
+    return;
+  }
+  await addDoc(jobsRef,{id:uid(),order,saw,customer,material,qty,length,time:Number(time),due,notes,rush,salesperson,operator,pct:0,status:'queued',added:Date.now(),completedAt:null});
+  const msg=document.getElementById('form-msg');
+  msg.style.color=rush?'#A32D2D':'#065F46';
+  msg.textContent=`${order} added to ${saw} queue${rush?' as a rush order':''}.`;
+  clearForm(true);
+  setTimeout(()=>msg.textContent='',3000);
+};
+
+window.clearForm=function(keepMsg){
+  ['f-order','f-customer','f-material','f-qty','f-length','f-time','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-rush').checked=false;
+  document.getElementById('f-salesperson').value='';
+  document.getElementById('f-operator').value='';
+  document.getElementById('f-salesperson-custom').style.display='none';
+  document.getElementById('f-operator-custom').style.display='none';
+  if(!keepMsg)document.getElementById('form-msg').textContent='';
+};
+
+// Show/hide custom input fields
+document.getElementById('f-salesperson').addEventListener('change',function(){
+  document.getElementById('f-salesperson-custom').style.display=this.value==='__custom_sp__'?'block':'none';
+});
+document.getElementById('f-operator').addEventListener('change',function(){
+  document.getElementById('f-operator-custom').style.display=this.value==='__custom_op__'?'block':'none';
+});
+
+// Real-time listener — keeps all devices in sync automatically
+const q = query(jobsRef, orderBy('added'));
+onSnapshot(q, (snapshot) => {
+  jobs = snapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
+  renderAll();
+});
+</script>
+</body>
+</html>
