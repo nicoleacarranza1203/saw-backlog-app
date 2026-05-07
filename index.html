@@ -83,11 +83,81 @@
     .progress-label{font-size:12px;color:#666;white-space:nowrap;}
     .prog-select{width:auto;min-width:110px;padding:4px 8px;font-size:12px;}
     .loading{text-align:center;padding:40px;color:#999;}
-    @media(max-width:600px){
-      .metric-grid{grid-template-columns:repeat(3,1fr);}
+
+    /* ── MOBILE ── */
+    @media(max-width:640px){
+      body{font-size:15px;}
+      .app{padding:10px 10px 80px 10px;}
+      h1{font-size:17px;margin-bottom:12px;}
+
+      /* Tab bar scrolls horizontally on small screens */
+      .tab-bar{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:2px;}
+      .tab{white-space:nowrap;padding:10px 14px;font-size:13px;}
+
+      /* Metrics: 2 columns on mobile */
+      .metric-grid{grid-template-columns:repeat(2,1fr);gap:8px;}
+      .metric{padding:10px;}
+      .metric-val{font-size:20px;}
+
+      /* Forms: single column */
       .form-grid{grid-template-columns:1fr;}
       .form-grid .span2{grid-column:span 1;}
-      .history-row{grid-template-columns:80px 70px 1fr 60px;}
+
+      /* Bigger inputs for touch */
+      select,input[type=text],input[type=number],input[type=date]{
+        font-size:16px !important; /* prevents iOS zoom */
+        padding:10px 12px;
+        min-height:44px;
+      }
+
+      /* Bigger buttons for touch */
+      .btn{padding:10px 16px;font-size:14px;min-height:44px;}
+      .btn-complete{padding:12px 20px;font-size:15px;}
+      .status-btn{padding:10px 14px;font-size:13px;min-height:44px;}
+
+      /* Cards */
+      .card{padding:12px;}
+      .card-sm{padding:12px;}
+
+      /* Saw bars: stack info vertically */
+      .saw-row{flex-wrap:wrap;gap:6px;}
+      .saw-name{min-width:80px;}
+
+      /* Job table on dashboard — hide less important columns */
+      .job-table colgroup,.job-table col{display:none;}
+      .job-table{font-size:12px;}
+      .job-table th:nth-child(n+5):not(:nth-child(9)):not(:nth-child(10)):not(:nth-child(11)):not(:nth-child(12)),
+      .job-table td:nth-child(n+5):not(:nth-child(9)):not(:nth-child(10)):not(:nth-child(11)):not(:nth-child(12)){display:none;}
+
+      /* History rows: 3 columns */
+      .history-row{grid-template-columns:80px 70px 1fr;font-size:12px;}
+      .history-row span:nth-child(4),.history-row span:nth-child(5){display:none;}
+
+      /* Archive filters: single column */
+      #tab-archive .card > div:nth-child(2),
+      #tab-archive .card > div:nth-child(3){grid-template-columns:1fr;}
+
+      /* Operator collapsed card summary wraps nicely */
+      .card-sm > div:first-child{flex-wrap:wrap;gap:6px;}
+
+      /* Progress row */
+      .progress-row{flex-wrap:wrap;gap:6px;}
+      .prog-select{min-width:90px;}
+
+      /* Rush toggle */
+      .rush-toggle{font-size:13px;}
+
+      /* Paste import textarea */
+      #paste-input{height:80px;font-size:14px;}
+
+      /* Sticky complete button area on operator cards */
+      .btn-complete{width:100%;}
+    }
+
+    /* Tablet tweaks */
+    @media(min-width:641px) and (max-width:900px){
+      .metric-grid{grid-template-columns:repeat(2,1fr);}
+      .job-table{font-size:12px;}
     }
   </style>
 </head>
@@ -95,11 +165,28 @@
 <div class="app">
   <h1>⚙️ Saw Cutting Backlog</h1>
 
-  <div class="tab-bar">
+  <!-- Desktop tab bar -->
+  <div class="tab-bar" id="desktop-tabs">
     <button class="tab active" onclick="showTab('dashboard',event)">Sales dashboard</button>
     <button class="tab" onclick="showTab('operator',event)">Operator input</button>
     <button class="tab" onclick="showTab('history',event)">Daily summary</button>
     <button class="tab" onclick="showTab('archive',event)">Archive</button>
+  </div>
+
+  <!-- Mobile bottom nav -->
+  <div id="mobile-nav" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e0e0e0;display:flex;z-index:100;box-shadow:0 -2px 8px rgba(0,0,0,0.08);">
+    <button class="mobile-nav-btn active" onclick="showTab('dashboard',event)" data-tab="dashboard" style="flex:1;padding:10px 4px;font-size:11px;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:#666;font-family:inherit;">
+      <span style="font-size:18px;">📊</span>Dashboard
+    </button>
+    <button class="mobile-nav-btn" onclick="showTab('operator',event)" data-tab="operator" style="flex:1;padding:10px 4px;font-size:11px;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:#666;font-family:inherit;">
+      <span style="font-size:18px;">⚙️</span>Operator
+    </button>
+    <button class="mobile-nav-btn" onclick="showTab('history',event)" data-tab="history" style="flex:1;padding:10px 4px;font-size:11px;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:#666;font-family:inherit;">
+      <span style="font-size:18px;">📋</span>Daily
+    </button>
+    <button class="mobile-nav-btn" onclick="showTab('archive',event)" data-tab="archive" style="flex:1;padding:10px 4px;font-size:11px;border:none;background:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:#666;font-family:inherit;">
+      <span style="font-size:18px;">🗂️</span>Archive
+    </button>
   </div>
 
   <div id="tab-dashboard" class="section active">
@@ -304,6 +391,21 @@ const MAX_MIN = 480;
 const PROG_OPTS = [0,25,50,75,100];
 let jobs = [];
 let opSawFilter = 'all';
+const expandedCards = new Set();
+
+window.toggleCard=function(docId){
+  if(expandedCards.has(docId)) expandedCards.delete(docId);
+  else expandedCards.add(docId);
+  renderOperator();
+};
+
+window.updateField=async function(docId, field, value){
+  try{
+    await updateDoc(doc(db,'jobs',docId),{[field]:value});
+  } catch(err){
+    console.error('Update failed:',err);
+  }
+};
 
 function uid(){return 'j'+Date.now()+Math.floor(Math.random()*999);}
 
@@ -438,41 +540,104 @@ function renderOperator(){
   el.innerHTML=visible.map(j=>{
     const pct=j.pct||0;
     const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
+    const isExpanded = expandedCards.has(j.docId);
+    const sawOpts = SAWS_ALL.map(s=>`<option value="${s}" ${j.saw===s?'selected':''}>${s}</option>`).join('');
+    const spOpts = ['','NC','HM','MT','MR','IC','HK','TD','TS'].map(s=>`<option value="${s}" ${j.salesperson===s?'selected':''}>${s||'Select...'}</option>`).join('');
+    const opOpts = ['','EG','MM','ELG'].map(s=>`<option value="${s}" ${j.operator===s?'selected':''}>${s||'Select...'}</option>`).join('');
+    const riskOpts = ['','Low','Medium','High'].map(s=>`<option value="${s}" ${j.risk===s?'selected':''}>${s||'Select...'}</option>`).join('');
+
     return `<div class="card-sm ${j.rush?'rush':''}" id="card-${j.docId}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span style="font-weight:500;">${j.order}</span>
-          ${j.rush?rushBadge():''}
-          ${j.risk?riskBadge(j.risk):''}
-          <span style="color:#666;font-size:12px;">${j.saw}</span>
-          ${j.notes?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px;">${j.notes}</span>`:''}
+
+      <!-- COLLAPSED SUMMARY ROW -->
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window.toggleCard('${j.docId}')">
+        <span style="font-size:12px;color:#aaa;flex-shrink:0;">${isExpanded?'▲':'▼'}</span>
+        <span style="font-weight:500;font-size:13px;min-width:80px;">${j.order}</span>
+        ${j.rush?rushBadge():''}
+        ${j.risk?riskBadge(j.risk):''}
+        ${statusBadge(j.status)}
+        <span style="font-size:12px;color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.saw} · ${j.customer} · ${j.material}${j.length?' '+j.length:''}</span>
+        <span style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Due ${j.due||'—'} · ${pct}%</span>
+      </div>
+
+      <!-- EXPANDED DETAIL + EDIT -->
+      ${isExpanded?`
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #ebebeb;">
+
+        <!-- Editable fields grid -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;">
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Order #</label>
+            <input type="text" value="${j.order}" onchange="window.updateField('${j.docId}','order',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Saw</label>
+            <select onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:12px;padding:5px 8px;">${sawOpts}</select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Customer</label>
+            <input type="text" value="${j.customer||''}" onchange="window.updateField('${j.docId}','customer',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Material & size</label>
+            <input type="text" value="${j.material||''}" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Qty</label>
+            <input type="text" value="${j.qty||''}" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Length</label>
+            <input type="text" value="${j.length||''}" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Est. cut time (min)</label>
+            <input type="number" value="${j.time||''}" onchange="window.updateField('${j.docId}','time',Number(this.value))" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Due date</label>
+            <input type="text" value="${j.due||''}" onchange="window.updateField('${j.docId}','due',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Salesperson</label>
+            <select onchange="window.updateField('${j.docId}','salesperson',this.value)" style="font-size:12px;padding:5px 8px;">${spOpts}</select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Operator</label>
+            <select onchange="window.updateField('${j.docId}','operator',this.value)" style="font-size:12px;padding:5px 8px;">${opOpts}</select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Risk</label>
+            <select onchange="window.updateField('${j.docId}','risk',this.value)" style="font-size:12px;padding:5px 8px;">${riskOpts}</select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#999;margin-bottom:3px;">Special instructions</label>
+            <input type="text" value="${j.notes||''}" onchange="window.updateField('${j.docId}','notes',this.value)" style="font-size:12px;padding:5px 8px;">
+          </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-          <button class="btn btn-rush ${j.rush?'active-rush':''}" onclick="window.toggleRush('${j.docId}')">${j.rush?'Remove rush':'Mark rush'}</button>
-          <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeJob('${j.docId}')">Remove</button>
+
+        <!-- Status + Complete -->
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div class="status-btns">
+            <button class="status-btn ${j.status==='queued'?'sel-queue':''}" onclick="window.setStatus('${j.docId}','queued')">Queued</button>
+            <button class="status-btn ${j.status==='cutting'?'sel-cutting':''}" onclick="window.setStatus('${j.docId}','cutting')">Cutting</button>
+            <button class="status-btn ${j.status==='hold'?'sel-hold':''}" onclick="window.setStatus('${j.docId}','hold')">On hold</button>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-rush ${j.rush?'active-rush':''}" onclick="window.toggleRush('${j.docId}')">${j.rush?'Remove rush':'Mark rush'}</button>
+            <button class="btn btn-complete" onclick="window.completeJob('${j.docId}')">✓ Complete</button>
+            <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeJob('${j.docId}')">Remove</button>
+          </div>
         </div>
-      </div>
-      <div style="font-size:12px;color:#666;margin-bottom:10px;">
-        ${j.customer} &nbsp;·&nbsp; ${j.material}${j.length?' '+j.length:''} &nbsp;·&nbsp; ${j.qty||'?'} pcs &nbsp;·&nbsp; Due ${j.due||'—'} &nbsp;·&nbsp; ~${j.time} min
-        ${j.salesperson||j.operator?`<span style="margin-left:6px;color:#aaa;">|</span>`:''}
-        ${j.salesperson?`<span style="margin-left:6px;">SP: <strong>${j.salesperson}</strong></span>`:''}
-        ${j.operator?`<span style="margin-left:6px;">Op: <strong>${j.operator}</strong></span>`:''}
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div class="status-btns">
-          <button class="status-btn ${j.status==='queued'?'sel-queue':''}" onclick="window.setStatus('${j.docId}','queued')">Queued</button>
-          <button class="status-btn ${j.status==='cutting'?'sel-cutting':''}" onclick="window.setStatus('${j.docId}','cutting')">Cutting</button>
-          <button class="status-btn ${j.status==='hold'?'sel-hold':''}" onclick="window.setStatus('${j.docId}','hold')">On hold</button>
+
+        <!-- Progress -->
+        <div class="progress-row">
+          <span class="progress-label">% Complete:</span>
+          <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
+            ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
+          </select>
+          <div style="flex:1;">${progBar(pct)}</div>
         </div>
-        <button class="btn btn-complete" onclick="window.completeJob('${j.docId}')">✓ Complete</button>
-      </div>
-      <div class="progress-row">
-        <span class="progress-label">% Complete:</span>
-        <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
-          ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
-        </select>
-        <div style="flex:1;">${progBar(pct)}</div>
-      </div>
+      </div>`:''}
     </div>`;
   }).join('');
 }
@@ -526,12 +691,36 @@ function renderHistory(){
 
 function renderAll(){renderDashboard();renderOperator();renderHistory();renderArchive();}
 
+// Detect mobile and show/hide nav bars
+function checkMobile(){
+  const isMobile = window.innerWidth <= 640;
+  document.getElementById('mobile-nav').style.display = isMobile ? 'flex' : 'none';
+  document.getElementById('desktop-tabs').style.display = isMobile ? 'none' : 'flex';
+}
+checkMobile();
+window.addEventListener('resize', checkMobile);
+
 window.showTab=function(t,e){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-btn').forEach(el=>{
+    el.style.color='#666';
+    el.style.fontWeight='400';
+  });
   document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
-  if(e&&e.target)e.target.classList.add('active');
-  renderAll();
+  // Highlight correct nav button
+  document.querySelectorAll('.tab, .mobile-nav-btn').forEach(el=>{
+    if(el.getAttribute('data-tab')===t||el.onclick?.toString().includes("'"+t+"'")){
+      el.classList.add('active');
+      el.style.color='#1a1a1a';
+      el.style.fontWeight='600';
+    }
+  });
+  if(t==='dashboard')renderDashboard();
+  else if(t==='operator')renderOperator();
+  else if(t==='history')renderHistory();
+  else if(t==='archive')renderArchive();
+  window.scrollTo(0,0);
 };
 
 window.setSawFilter=function(s){opSawFilter=s;renderOperator();};
