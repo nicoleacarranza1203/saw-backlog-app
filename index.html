@@ -26,7 +26,7 @@
     .badge-risk-low{background:#D1FAE5;color:#065F46;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
     .badge-risk-medium{background:#FEF3C7;color:#92400E;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
     .badge-risk-high{background:#FEE2E2;color:#991B1B;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
-    .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;}
+    .metric-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px;}
     .metric{background:#f9f9f9;border-radius:8px;padding:12px;}
     .metric-label{font-size:11px;color:#666;margin-bottom:4px;}
     .metric-val{font-size:22px;font-weight:500;}
@@ -84,7 +84,7 @@
     .prog-select{width:auto;min-width:110px;padding:4px 8px;font-size:12px;}
     .loading{text-align:center;padding:40px;color:#999;}
     @media(max-width:600px){
-      .metric-grid{grid-template-columns:repeat(2,1fr);}
+      .metric-grid{grid-template-columns:repeat(3,1fr);}
       .form-grid{grid-template-columns:1fr;}
       .form-grid .span2{grid-column:span 1;}
       .history-row{grid-template-columns:80px 70px 1fr 60px;}
@@ -283,21 +283,57 @@ function renderDashboard(){
   const cutting=jobs.filter(j=>j.status==='cutting');
   const queued=jobs.filter(j=>j.status==='queued');  const rushActive=jobs.filter(j=>j.rush&&j.status!=='done');
   const totalBacklog=jobs.filter(j=>['queued','cutting','hold'].includes(j.status)).reduce((a,j)=>a+Number(j.time||0),0);
+  const totalDays=totalBacklog/MAX_MIN;
+  const totalLabel=totalDays>1?`${totalDays.toFixed(1)}d`:`${Math.round(totalBacklog)}m`;
   document.getElementById('metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active jobs</div><div class="metric-val">${active.length}</div></div>
     <div class="metric"><div class="metric-label">Currently cutting</div><div class="metric-val ok">${cutting.length}</div></div>
     <div class="metric"><div class="metric-label">In queue</div><div class="metric-val">${queued.length}</div></div>
+    <div class="metric"><div class="metric-label">Total backlog</div><div class="metric-val ${totalDays>1?'warn':''}">${totalLabel}</div></div>
     <div class="metric"><div class="metric-label">Rush orders</div><div class="metric-val ${rushActive.length?'rush':''}">${rushActive.length}</div></div>
   `;
   document.getElementById('saw-bars').innerHTML=SAWS.map(s=>{
     const mins=totalMins(s,['queued','cutting','hold']);
-    const pct=Math.min(100,Math.round(mins/MAX_MIN*100));
-    const cls=pct<40?'low':pct<75?'mid':'high';
+    const days=mins/MAX_MIN;
+    // Bar fills to 100% at 1 day, then shows overflow segments for each additional day
+    const barPct=Math.min(100,Math.round((days % 1 || days>=1?days%1:0)*100));
+    const fullDays=Math.floor(days);
+    const cls=days<0.4?'low':days<0.75?'mid':'high';
     const cj=jobs.filter(j=>j.saw===s&&j.status==='cutting');
     const rj=jobs.filter(j=>j.saw===s&&j.rush&&j.status!=='done');
+
+    // Build multi-day bar — one segment per full day + remainder
+    let barHtml='';
+    if(days<=1){
+      barHtml=`<div class="bar-track"><div class="bar-fill ${cls}" style="width:${Math.round(days*100)}%"></div></div>`;
+    } else {
+      // Show stacked day markers
+      const segs=[];
+      for(let i=0;i<fullDays;i++) segs.push(`<div style="flex:1;height:8px;background:#E24B4A;border-radius:2px;margin-right:2px;"></div>`);
+      const rem=days-fullDays;
+      if(rem>0) segs.push(`<div style="flex:${rem};height:8px;background:#E24B4A;opacity:0.5;border-radius:2px;"></div>`);
+      const empty=Math.max(0,1-rem);
+      if(empty>0) segs.push(`<div style="flex:${empty};height:8px;background:#e5e5e5;border-radius:2px;"></div>`);
+      barHtml=`<div style="flex:1;display:flex;align-items:center;gap:2px;">${segs.join('')}</div>`;
+    }
+
+    // Format backlog label
+    let backlogLabel;
+    if(mins===0){
+      backlogLabel=`<span style="font-size:12px;color:#aaa;min-width:90px;text-align:right;">idle</span>`;
+    } else if(days<1){
+      backlogLabel=`<span style="font-size:12px;color:#666;min-width:90px;text-align:right;">${Math.round(mins)} min</span>`;
+    } else {
+      const wholeDays=Math.floor(days);
+      const remainMins=Math.round((days-wholeDays)*MAX_MIN);
+      const dayStr=wholeDays===1?'1 day':`${wholeDays} days`;
+      const remStr=remainMins>0?` + ${remainMins}m`:'';
+      backlogLabel=`<span style="font-size:12px;font-weight:600;color:#E24B4A;min-width:90px;text-align:right;">${dayStr}${remStr}</span>`;
+    }
+
     const nowCutting=cj.length?`<span style="font-size:11px;color:#666;margin-left:4px;">cutting: ${cj.map(j=>j.order+(j.pct>0?' ('+j.pct+'%)':'')).join(', ')}</span>`:`<span style="font-size:11px;color:#aaa;margin-left:4px;">idle</span>`;
     const rushPip=rj.length?`<span class="badge-rush" style="margin-left:4px;">${rj.length} rush</span>`:'';
-    return `<div class="saw-row"><span class="saw-name">${s}</span><div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div><span style="font-size:12px;min-width:52px;text-align:right;color:#666;">${Math.round(mins)} min</span>${nowCutting}${rushPip}</div>`;
+    return `<div class="saw-row"><span class="saw-name">${s}</span>${barHtml}${backlogLabel}${nowCutting}${rushPip}</div>`;
   }).join('');
   const filterSel=document.getElementById('dash-filter');
   const cur=filterSel.value;
