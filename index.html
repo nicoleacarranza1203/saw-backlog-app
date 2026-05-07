@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -132,6 +133,22 @@
   </div>
 
   <div id="tab-operator" class="section">
+
+    <!-- PASTE IMPORT -->
+    <div class="card" id="import-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div>
+          <span style="font-weight:500;font-size:13px;">Paste import from order log</span>
+          <span style="font-size:11px;color:#999;margin-left:8px;">Copy rows from Excel → click below → Ctrl+V</span>
+        </div>
+        <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="document.getElementById('import-area').style.display=document.getElementById('import-area').style.display==='none'?'block':'none'">Show / Hide</button>
+      </div>
+      <div id="import-area">
+        <textarea id="paste-input" placeholder="Click here then press Ctrl+V to paste rows from your Excel order log..." style="width:100%;height:100px;padding:8px;font-size:12px;border:1px dashed #ccc;border-radius:6px;background:#fafafa;font-family:inherit;resize:vertical;" oninput="previewPaste()"></textarea>
+        <div id="paste-preview" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
     <div class="card">
       <div style="font-weight:500;font-size:13px;margin-bottom:12px;">Add new job to queue</div>
       <div class="form-grid">
@@ -550,7 +567,140 @@ document.getElementById('f-operator').addEventListener('change',function(){
   document.getElementById('f-operator-custom').style.display=this.value==='__custom_op__'?'block':'none';
 });
 
-// Real-time listener — keeps all devices in sync automatically
+// ── PASTE IMPORT ──────────────────────────────────────────
+const EXPECTED_HEADERS = ['UNASSIGNED','SP','DATE','SHIP DATE','VIA','ORDER#','PCs','MATERIAL','WEIGHT','LINES','Status','ROUTED BACK','ASSIGNED','Risk','CUTTING','TIME ESTIMATE','ACTUAL','COMMENTS'];
+
+function parseExcelPaste(raw){
+  const lines = raw.trim().split('\n').map(l=>l.split('\t').map(c=>c.trim()));
+  if(!lines.length) return [];
+  // Detect if first row is header
+  let dataRows = lines;
+  if(lines[0][0].toUpperCase()===EXPECTED_HEADERS[0].toUpperCase() || lines[0].some(c=>c.toUpperCase()==='ORDER#')){
+    dataRows = lines.slice(1);
+  }
+  return dataRows.filter(r=>r.length>5&&r.some(c=>c)).map(r=>{
+    // Map columns by index based on known sheet layout
+    const customer  = r[0]||'';
+    const sp        = r[1]||'';
+    const shipDate  = r[3]||'';
+    const orderNum  = r[5]||'';
+    const qty       = (r[6]||'').replace(/,/g,'');
+    const material  = r[7]||'';
+    const risk      = r[13]||'';
+    const timeEst   = (r[15]||'').replace(/,/g,'');
+    const comments  = r[17]||'';
+    // Format due date MM/DD
+    let due='';
+    if(shipDate){
+      const d=new Date(shipDate);
+      if(!isNaN(d)) due=`${d.getMonth()+1}/${d.getDate()}`;
+      else due=shipDate;
+    }
+    // Normalize risk
+    let riskNorm='';
+    if(risk.toLowerCase().includes('high')) riskNorm='High';
+    else if(risk.toLowerCase().includes('med')) riskNorm='Medium';
+    else if(risk.toLowerCase().includes('low')) riskNorm='Low';
+    return {customer,salesperson:sp,due,order:orderNum,qty,material,risk:riskNorm,time:timeEst,notes:comments,saw:'',operator:'',rush:false,pct:0};
+  }).filter(r=>r.order);
+}
+
+let pendingImports=[];
+
+window.previewPaste=function(){
+  const raw=document.getElementById('paste-input').value;
+  if(!raw.trim()){document.getElementById('paste-preview').innerHTML='';return;}
+  pendingImports=parseExcelPaste(raw);
+  if(!pendingImports.length){
+    document.getElementById('paste-preview').innerHTML=`<div style="color:#991B1B;font-size:12px;padding:8px;">No valid rows detected — make sure you copy including the data rows from Excel.</div>`;
+    return;
+  }
+  const sawOpts=SAWS.map(s=>`<option value="${s}">${s}</option>`).join('');
+  document.getElementById('paste-preview').innerHTML=`
+    <div style="font-size:12px;font-weight:500;margin-bottom:8px;color:#065F46;">✓ ${pendingImports.length} job${pendingImports.length>1?'s':''} detected — assign saws then confirm import</div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="background:#f5f5f5;">
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Order #</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Customer</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Material</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Qty</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Due</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">SP</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Risk</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Est. min</th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Saw <span style="color:#E24B4A;">*</span></th>
+        <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Rush</th>
+      </tr></thead>
+      <tbody>
+        ${pendingImports.map((j,i)=>`<tr style="border-bottom:1px solid #f0f0f0;">
+          <td style="padding:6px 8px;font-weight:500;">${j.order}</td>
+          <td style="padding:6px 8px;">${j.customer}</td>
+          <td style="padding:6px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${j.material}">${j.material}</td>
+          <td style="padding:6px 8px;">${j.qty}</td>
+          <td style="padding:6px 8px;">${j.due}</td>
+          <td style="padding:6px 8px;">${j.salesperson}</td>
+          <td style="padding:6px 8px;">${j.risk?riskBadge(j.risk):'—'}</td>
+          <td style="padding:6px 8px;">${j.time||'—'}</td>
+          <td style="padding:6px 8px;">
+            <select style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;" onchange="pendingImports[${i}].saw=this.value">
+              <option value="">Pick saw</option>${sawOpts}
+            </select>
+          </td>
+          <td style="padding:6px 8px;text-align:center;">
+            <input type="checkbox" onchange="pendingImports[${i}].rush=this.checked" style="accent-color:#E24B4A;">
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn btn-primary" onclick="window.confirmImport()">✓ Add all to queue</button>
+      <button class="btn" onclick="document.getElementById('paste-input').value='';document.getElementById('paste-preview').innerHTML='';pendingImports=[];">Clear</button>
+    </div>
+    <div id="import-msg" style="font-size:12px;margin-top:6px;min-height:16px;"></div>
+  `;
+};
+
+window.confirmImport=async function(){
+  if(!pendingImports.length) return;
+  const msg=document.getElementById('import-msg');
+  msg.style.color='#666';
+  msg.textContent='Adding jobs...';
+  let added=0;
+  for(const j of pendingImports){
+    await addDoc(jobsRef,{
+      id:uid(),
+      order:j.order,
+      saw:j.saw||'Unassigned',
+      customer:j.customer,
+      material:j.material,
+      qty:j.qty,
+      length:'',
+      time:Number(j.time)||0,
+      due:j.due,
+      notes:j.notes,
+      rush:j.rush||false,
+      risk:j.risk||'',
+      salesperson:j.salesperson||'',
+      operator:'',
+      pct:0,
+      status:'queued',
+      added:Date.now()+(added*10),
+      completedAt:null
+    });
+    added++;
+  }
+  msg.style.color='#065F46';
+  msg.textContent=`✓ ${added} job${added>1?'s':''} added to queue successfully!`;
+  document.getElementById('paste-input').value='';
+  pendingImports=[];
+  setTimeout(()=>{
+    document.getElementById('paste-preview').innerHTML='';
+    msg.textContent='';
+  },3000);
+};
+// ── END PASTE IMPORT ───────────────────────────────────────
 const q = query(jobsRef, orderBy('added'));
 onSnapshot(q, (snapshot) => {
   jobs = snapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
