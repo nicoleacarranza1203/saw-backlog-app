@@ -231,7 +231,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // =============================================
 // PASTE YOUR FIREBASE CONFIG HERE
@@ -668,37 +668,47 @@ window.confirmImport=async function(){
   const msg=document.getElementById('import-msg');
   msg.style.color='#666';
   msg.textContent='Adding jobs...';
-  let added=0;
-  for(const j of pendingImports){
-    await addDoc(jobsRef,{
-      id:uid(),
-      order:j.order,
-      saw:j.saw||'Unassigned',      customer:j.customer,
-      material:j.material,
-      qty:j.qty,
-      length:'',
-      time:Number(j.time)||0,
-      due:j.due,
-      notes:j.notes,
-      rush:j.rush||false,
-      risk:j.risk||'',
-      salesperson:j.salesperson||'',
-      operator:'',
-      pct:0,
-      status:'queued',
-      added:Date.now()+(added*10),
-      completedAt:null
+  try{
+    const batch=writeBatch(db);
+    const now=Date.now();
+    pendingImports.forEach((j,i)=>{
+      const ref=doc(jobsRef);
+      batch.set(ref,{
+        id:uid(),
+        order:j.order,
+        saw:j.saw||'Unassigned',
+        customer:j.customer,
+        material:j.material,
+        qty:j.qty,
+        length:'',
+        time:Number(j.time)||0,
+        due:j.due,
+        notes:j.notes,
+        rush:j.rush||false,
+        risk:j.risk||'',
+        salesperson:j.salesperson||'',
+        operator:'',
+        pct:0,
+        status:'queued',
+        added:now+(i*10),
+        completedAt:null
+      });
     });
-    added++;
+    await batch.commit();
+    const count=pendingImports.length;
+    msg.style.color='#065F46';
+    msg.textContent=`✓ ${count} job${count>1?'s':''} added to queue successfully!`;
+    document.getElementById('paste-input').value='';
+    pendingImports=[];
+    setTimeout(()=>{
+      document.getElementById('paste-preview').innerHTML='';
+      msg.textContent='';
+    },3000);
+  } catch(err){
+    console.error(err);
+    msg.style.color='#991B1B';
+    msg.textContent='Error saving — check your connection and try again. Details: '+err.message;
   }
-  msg.style.color='#065F46';
-  msg.textContent=`✓ ${added} job${added>1?'s':''} added to queue successfully!`;
-  document.getElementById('paste-input').value='';
-  pendingImports=[];
-  setTimeout(()=>{
-    document.getElementById('paste-preview').innerHTML='';
-    msg.textContent='';
-  },3000);
 };
 // ── END PASTE IMPORT ───────────────────────────────────────
 const q = query(jobsRef, orderBy('added'));
