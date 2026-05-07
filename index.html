@@ -203,9 +203,9 @@
         <span style="font-weight:500;font-size:13px;">All active jobs</span>
         <div style="display:flex;gap:8px;align-items:center;">
           <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#666;margin:0;cursor:pointer;">
-            <input type="checkbox" id="rush-only" onchange="renderDashboard()" style="accent-color:#E24B4A;width:13px;height:13px;"> Rush only
+            <input type="checkbox" id="rush-only" onchange="window.renderDashboard()" style="accent-color:#E24B4A;width:13px;height:13px;"> Rush only
           </label>
-          <select id="dash-filter" style="width:auto;padding:4px 8px;font-size:12px;" onchange="renderDashboard()">
+          <select id="dash-filter" style="width:auto;padding:4px 8px;font-size:12px;" onchange="window.renderDashboard()">
             <option value="">All saws</option>
           </select>
         </div>
@@ -293,7 +293,7 @@
     <div class="card">
       <div style="font-weight:500;font-size:13px;margin-bottom:10px;">Update job status</div>
       <div style="margin-bottom:10px;">
-        <input type="text" id="op-search" placeholder="🔍 Search by order #..." style="font-size:13px;" oninput="renderOperator()">
+        <input type="text" id="op-search" placeholder="🔍 Search by order #..." style="font-size:13px;" oninput="window.renderOperator()">
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:12px;color:#666;">Saw:</span>
@@ -331,19 +331,19 @@
       </div>
       <!-- Search and filters -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-        <input type="text" id="archive-search" placeholder="🔍 Search order #, customer, SP, operator..." oninput="renderArchive()" style="font-size:12px;">
-        <select id="archive-saw" onchange="renderArchive()" style="font-size:12px;">
+        <input type="text" id="archive-search" placeholder="🔍 Search order #, customer, SP, operator..." oninput="window.renderArchive()" style="font-size:12px;">
+        <select id="archive-saw" onchange="window.renderArchive()" style="font-size:12px;">
           <option value="">All saws</option>
         </select>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
         <div>
           <label style="font-size:11px;color:#999;margin-bottom:3px;">From</label>
-          <input type="date" id="archive-from" onchange="renderArchive()" style="font-size:12px;">
+          <input type="date" id="archive-from" onchange="window.renderArchive()" style="font-size:12px;">
         </div>
         <div>
           <label style="font-size:11px;color:#999;margin-bottom:3px;">To</label>
-          <input type="date" id="archive-to" onchange="renderArchive()" style="font-size:12px;">
+          <input type="date" id="archive-to" onchange="window.renderArchive()" style="font-size:12px;">
         </div>
       </div>
       <!-- Results -->
@@ -444,6 +444,7 @@ function totalMins(sawName,statuses){
 }
 
 function renderDashboard(){
+  window.renderDashboard=renderDashboard;
   const now=new Date();
   document.getElementById('last-updated').textContent='Updated '+now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const active=jobs.filter(j=>j.status!=='done');
@@ -527,6 +528,7 @@ function renderDashboard(){
 }
 
 function renderOperator(){
+  window.renderOperator=renderOperator;
   const sawSel=document.getElementById('f-saw');
   if(!sawSel.options.length) SAWS_ALL.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;sawSel.appendChild(o);});
   const fbDiv=document.getElementById('saw-filter-btns');
@@ -807,6 +809,7 @@ document.getElementById('f-operator').addEventListener('change',function(){
 });
 
 function renderArchive(){
+  window.renderArchive=renderArchive;
   const twelveMonthsAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
   const search = (document.getElementById('archive-search')?.value||'').toLowerCase().trim();
   const sawFilter = document.getElementById('archive-saw')?.value||'';
