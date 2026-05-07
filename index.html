@@ -99,6 +99,7 @@
     <button class="tab active" onclick="showTab('dashboard',event)">Sales dashboard</button>
     <button class="tab" onclick="showTab('operator',event)">Operator input</button>
     <button class="tab" onclick="showTab('history',event)">Daily summary</button>
+    <button class="tab" onclick="showTab('archive',event)">Archive</button>
   </div>
 
   <div id="tab-dashboard" class="section active">
@@ -228,6 +229,50 @@
     <div class="card">
       <div style="font-weight:500;font-size:13px;margin-bottom:10px;">Queue & active jobs</div>
       <div id="hist-active"></div>
+    </div>
+  </div>
+
+  <!-- ARCHIVE TAB -->
+  <div id="tab-archive" class="section">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <span style="font-weight:500;font-size:13px;">Completed jobs archive</span>
+          <span style="font-size:11px;color:#999;margin-left:8px;">Rolling 12 months</span>
+        </div>
+        <span style="font-size:11px;color:#999;" id="archive-count"></span>
+      </div>
+      <!-- Search and filters -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <input type="text" id="archive-search" placeholder="🔍 Search order #, customer, SP, operator..." oninput="renderArchive()" style="font-size:12px;">
+        <select id="archive-saw" onchange="renderArchive()" style="font-size:12px;">
+          <option value="">All saws</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div>
+          <label style="font-size:11px;color:#999;margin-bottom:3px;">From</label>
+          <input type="date" id="archive-from" onchange="renderArchive()" style="font-size:12px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#999;margin-bottom:3px;">To</label>
+          <input type="date" id="archive-to" onchange="renderArchive()" style="font-size:12px;">
+        </div>
+      </div>
+      <!-- Results -->
+      <div style="overflow-x:auto;">
+        <table class="job-table" id="archive-table">
+          <colgroup><col style="width:90px"><col style="width:85px"><col style="width:100px"><col style="width:110px"><col style="width:50px"><col style="width:55px"><col style="width:40px"><col style="width:40px"><col style="width:55px"><col style="width:85px"></colgroup>
+          <thead><tr>
+            <th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Est. time</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th>
+          </tr></thead>
+          <tbody id="archive-rows"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:11px;color:#999;" id="archive-summary"></span>
+        <button class="btn" style="font-size:12px;padding:4px 10px;" onclick="exportArchiveCSV()">⬇ Export CSV</button>
+      </div>
     </div>
   </div>
 </div>
@@ -479,7 +524,7 @@ function renderHistory(){
   </table>`;
 }
 
-function renderAll(){renderDashboard();renderOperator();renderHistory();}
+function renderAll(){renderDashboard();renderOperator();renderHistory();renderArchive();}
 
 window.showTab=function(t,e){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
@@ -572,7 +617,86 @@ document.getElementById('f-operator').addEventListener('change',function(){
   document.getElementById('f-operator-custom').style.display=this.value==='__custom_op__'?'block':'none';
 });
 
-// ── PASTE IMPORT ──────────────────────────────────────────
+function renderArchive(){
+  const twelveMonthsAgo = Date.now() - (365 * 24 * 60 * 60 * 1000);
+  const search = (document.getElementById('archive-search')?.value||'').toLowerCase().trim();
+  const sawFilter = document.getElementById('archive-saw')?.value||'';
+  const fromVal = document.getElementById('archive-from')?.value;
+  const toVal = document.getElementById('archive-to')?.value;
+  const fromTs = fromVal ? new Date(fromVal).getTime() : null;
+  const toTs = toVal ? new Date(toVal+'T23:59:59').getTime() : null;
+
+  // Populate saw dropdown
+  const sawSel = document.getElementById('archive-saw');
+  if(sawSel && sawSel.options.length<=1){
+    SAWS_ALL.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;sawSel.appendChild(o);});
+  }
+
+  let archived = jobs.filter(j=>{
+    if(j.status!=='done') return false;
+    if(!j.completedAt) return false;
+    if(j.completedAt < twelveMonthsAgo) return false;
+    if(sawFilter && j.saw!==sawFilter) return false;
+    if(fromTs && j.completedAt < fromTs) return false;
+    if(toTs && j.completedAt > toTs) return false;
+    if(search){
+      const haystack = `${j.order} ${j.customer} ${j.salesperson} ${j.operator} ${j.material}`.toLowerCase();
+      if(!haystack.includes(search)) return false;
+    }
+    return true;
+  }).sort((a,b)=>b.completedAt-a.completedAt);
+
+  document.getElementById('archive-count').textContent = `${archived.length} record${archived.length!==1?'s':''}`;
+
+  const totalMinsArchive = archived.reduce((a,j)=>a+Number(j.time||0),0);
+  const rushCount = archived.filter(j=>j.rush).length;
+  document.getElementById('archive-summary').textContent =
+    archived.length ? `Total cut time: ${Math.round(totalMinsArchive)} min · Rush orders: ${rushCount}` : '';
+
+  const tbody = document.getElementById('archive-rows');
+  if(!archived.length){
+    tbody.innerHTML=`<tr><td colspan="10" class="empty">No completed jobs found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = archived.map(j=>`
+    <tr class="${j.rush?'rush-row':''}">
+      <td style="font-weight:500;">${j.order}${j.rush?' '+rushBadge():''}</td>
+      <td>${j.saw||'—'}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.customer||'—'}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.material||'—'}${j.length?' '+j.length:''}</td>
+      <td>${j.qty||'—'}</td>
+      <td>${Math.round(j.time||0)} min</td>
+      <td>${j.salesperson||'—'}</td>
+      <td>${j.operator||'—'}</td>
+      <td>${j.risk?riskBadge(j.risk):'—'}</td>
+      <td style="white-space:nowrap;">${j.completedAt?new Date(j.completedAt).toLocaleDateString([],{month:'2-digit',day:'2-digit',year:'2-digit'})+' '+new Date(j.completedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'-'}</td>
+    </tr>`).join('');
+}
+
+window.exportArchiveCSV=function(){
+  const twelveMonthsAgo = Date.now()-(365*24*60*60*1000);
+  const rows = jobs.filter(j=>j.status==='done'&&j.completedAt&&j.completedAt>=twelveMonthsAgo)
+    .sort((a,b)=>b.completedAt-a.completedAt);
+  if(!rows.length){alert('No archived jobs to export.');return;}
+  const headers = ['Order #','Saw','Customer','Material','Length','Qty','Est. Time (min)','Due','Salesperson','Operator','Risk','Rush','Notes','Completed'];
+  const csv = [headers.join(','),
+    ...rows.map(j=>[
+      j.order,j.saw,j.customer,
+      `"${(j.material||'').replace(/"/g,'""')}"`,
+      j.length||'',j.qty||'',
+      Math.round(j.time||0),
+      j.due||'',j.salesperson||'',j.operator||'',
+      j.risk||'',j.rush?'Yes':'No',
+      `"${(j.notes||'').replace(/"/g,'""')}"`,
+      j.completedAt?new Date(j.completedAt).toLocaleString():''
+    ].join(','))
+  ].join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `saw-backlog-archive-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+};
 const EXPECTED_HEADERS = ['UNASSIGNED','SP','DATE','SHIP DATE','VIA','ORDER#','PCs','MATERIAL','WEIGHT','LINES','Status','ROUTED BACK','ASSIGNED','Risk','CUTTING','TIME ESTIMATE','ACTUAL','COMMENTS'];
 
 function parseExcelPaste(raw){
