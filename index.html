@@ -204,6 +204,9 @@
     </div>
     <div class="card">
       <div style="font-weight:500;font-size:13px;margin-bottom:10px;">Update job status</div>
+      <div style="margin-bottom:10px;">
+        <input type="text" id="op-search" placeholder="🔍 Search by order #..." style="font-size:13px;" oninput="renderOperator()">
+      </div>
       <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
         <span style="font-size:12px;color:#666;">Saw:</span>
         <div id="saw-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
@@ -382,10 +385,11 @@ function renderOperator(){
   const fbDiv=document.getElementById('saw-filter-btns');
   fbDiv.innerHTML=`<button class="btn ${opSawFilter==='all'?'btn-primary':''}" style="font-size:12px;padding:4px 10px;" onclick="window.setSawFilter('all')">All</button>`
     +SAWS_ALL.map(s=>`<button class="btn ${opSawFilter===s?'btn-primary':''}" style="font-size:12px;padding:4px 10px;" onclick="window.setSawFilter('${s}')">${s}</button>`).join('');
-  let visible=jobs.filter(j=>j.status!=='done'&&(opSawFilter==='all'||j.saw===opSawFilter));
+  const searchTerm=(document.getElementById('op-search')?.value||'').toLowerCase().trim();
+  let visible=jobs.filter(j=>j.status!=='done'&&(opSawFilter==='all'||j.saw===opSawFilter)&&(!searchTerm||j.order.toLowerCase().includes(searchTerm)));
   visible=sortJobs(visible);
   const el=document.getElementById('op-jobs');
-  if(!visible.length){el.innerHTML=`<div class="empty">No active jobs${opSawFilter!=='all'?' for '+opSawFilter:''}</div>`;return;}
+  if(!visible.length){el.innerHTML=`<div class="empty">${searchTerm?`No jobs matching "${searchTerm}"`:('No active jobs'+(opSawFilter!=='all'?' for '+opSawFilter:''))}</div>`;return;}
   el.innerHTML=visible.map(j=>{
     const pct=j.pct||0;
     const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
