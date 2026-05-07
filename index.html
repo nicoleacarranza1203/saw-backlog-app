@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,6 +23,9 @@
     .badge-done{background:#D1FAE5;color:#065F46;}
     .badge-hold{background:#FEE2E2;color:#991B1B;}
     .badge-rush{background:#FCEBEB;color:#A32D2D;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;border:1px solid #F09595;}
+    .badge-risk-low{background:#D1FAE5;color:#065F46;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
+    .badge-risk-medium{background:#FEF3C7;color:#92400E;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
+    .badge-risk-high{background:#FEE2E2;color:#991B1B;font-size:10px;font-weight:500;padding:2px 7px;border-radius:20px;}
     .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;}
     .metric{background:#f9f9f9;border-radius:8px;padding:12px;}
     .metric-label{font-size:11px;color:#666;margin-bottom:4px;}
@@ -120,8 +124,8 @@
       </div>
       <div style="overflow-x:auto;">
         <table class="job-table">
-          <colgroup><col style="width:14px"><col style="width:80px"><col style="width:75px"><col style="width:95px"><col style="width:85px"><col style="width:40px"><col style="width:48px"><col style="width:95px"><col style="width:62px"><col style="width:38px"><col style="width:38px"></colgroup>
-          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>SP</th><th>Op</th></tr></thead>
+          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:46px"><col style="width:90px"><col style="width:60px"><col style="width:36px"><col style="width:36px"><col style="width:55px"></colgroup>
+          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>SP</th><th>Op</th><th>Risk</th></tr></thead>
           <tbody id="dash-jobs"></tbody>
         </table>
       </div>
@@ -140,6 +144,15 @@
         <div><label>Length</label><input type="text" id="f-length" placeholder='e.g. 24"'></div>
         <div><label>Est. cut time (min)</label><input type="number" id="f-time" placeholder="min" min="1"></div>
         <div><label>Due date</label><input type="text" id="f-due" placeholder="MM/DD"></div>
+        <div>
+          <label>Risk</label>
+          <select id="f-risk">
+            <option value="">Select...</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+        </div>
         <div>
           <label>Salesperson</label>
           <select id="f-salesperson">
@@ -215,7 +228,6 @@ const firebaseConfig = {
   messagingSenderId: "YOUR_SENDER_ID",
   appId: "YOUR_APP_ID"
 };
-};
 // =============================================
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -246,6 +258,11 @@ function statusBadge(s){
 }
 
 function rushBadge(){return `<span class="badge-rush">Rush</span>`;}
+function riskBadge(r){
+  if(!r) return '';
+  const cls=r==='High'?'badge-risk-high':r==='Medium'?'badge-risk-medium':'badge-risk-low';
+  return `<span class="${cls}">${r}</span>`;
+}
 
 function progBar(pct){
   const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
@@ -302,6 +319,7 @@ function renderDashboard(){
       <td>${statusBadge(j.status)}</td>
       <td style="font-size:11px;color:#666;">${j.salesperson||'—'}</td>
       <td style="font-size:11px;color:#666;">${j.operator||'—'}</td>
+      <td>${j.risk?riskBadge(j.risk):'—'}</td>
     </tr>`).join('');
 }
 
@@ -323,6 +341,7 @@ function renderOperator(){
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <span style="font-weight:500;">${j.order}</span>
           ${j.rush?rushBadge():''}
+          ${j.risk?riskBadge(j.risk):''}
           <span style="color:#666;font-size:12px;">${j.saw}</span>
           ${j.notes?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px;">${j.notes}</span>`:''}
         </div>
@@ -458,6 +477,7 @@ window.addJob=async function(){
   const due=document.getElementById('f-due').value.trim();
   const notes=document.getElementById('f-notes').value.trim();
   const rush=document.getElementById('f-rush').checked;
+  const risk=document.getElementById('f-risk').value;
   const spSel=document.getElementById('f-salesperson').value;
   const salesperson=spSel==='__custom_sp__'?document.getElementById('f-salesperson-custom').value.trim():spSel;
   const opSel=document.getElementById('f-operator').value;
@@ -468,7 +488,7 @@ window.addJob=async function(){
     msg.textContent='Please fill in order #, customer, material, and cut time.';
     return;
   }
-  await addDoc(jobsRef,{id:uid(),order,saw,customer,material,qty,length,time:Number(time),due,notes,rush,salesperson,operator,pct:0,status:'queued',added:Date.now(),completedAt:null});
+  await addDoc(jobsRef,{id:uid(),order,saw,customer,material,qty,length,time:Number(time),due,notes,rush,risk,salesperson,operator,pct:0,status:'queued',added:Date.now(),completedAt:null});
   const msg=document.getElementById('form-msg');
   msg.style.color=rush?'#A32D2D':'#065F46';
   msg.textContent=`${order} added to ${saw} queue${rush?' as a rush order':''}.`;
@@ -479,6 +499,7 @@ window.addJob=async function(){
 window.clearForm=function(keepMsg){
   ['f-order','f-customer','f-material','f-qty','f-length','f-time','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-rush').checked=false;
+  document.getElementById('f-risk').value='';
   document.getElementById('f-salesperson').value='';
   document.getElementById('f-operator').value='';
   document.getElementById('f-salesperson-custom').style.display='none';
