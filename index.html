@@ -247,7 +247,7 @@
         <div><label>Qty</label><input type="number" id="f-qty" placeholder="pcs" min="1"></div>
         <div><label>Length</label><input type="text" id="f-length" placeholder='e.g. 24"'></div>
         <div><label>Est. cut time (min)</label><input type="number" id="f-time" placeholder="min" min="1"></div>
-        <div><label>Due date</label><input type="text" id="f-due" placeholder="MM/DD"></div>
+        <div><label>Due date</label><input type="date" id="f-due"></div>
         <div>
           <label>Risk</label>
           <select id="f-risk">
@@ -349,9 +349,9 @@
       <!-- Results -->
       <div style="overflow-x:auto;">
         <table class="job-table" id="archive-table">
-          <colgroup><col style="width:90px"><col style="width:85px"><col style="width:100px"><col style="width:110px"><col style="width:50px"><col style="width:55px"><col style="width:40px"><col style="width:40px"><col style="width:55px"><col style="width:85px"><col style="width:80px"></colgroup>
+          <colgroup><col style="width:88px"><col style="width:82px"><col style="width:95px"><col style="width:105px"><col style="width:46px"><col style="width:52px"><col style="width:52px"><col style="width:36px"><col style="width:36px"><col style="width:52px"><col style="width:82px"><col style="width:76px"></colgroup>
           <thead><tr>
-            <th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Est. time</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th><th></th>
+            <th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Est.</th><th>Actual</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th><th></th>
           </tr></thead>
           <tbody id="archive-rows"></tbody>
         </table>
@@ -399,13 +399,23 @@ window.toggleCard=function(docId){
   renderOperator();
 };
 
+let isEditing = false;
+let renderDebounce = null;
+
 window.updateField=async function(docId, field, value){
+  isEditing = true;
   try{
     await updateDoc(doc(db,'jobs',docId),{[field]:value});
   } catch(err){
     console.error('Update failed:',err);
   }
+  // Allow re-renders again after a short delay
+  clearTimeout(renderDebounce);
+  renderDebounce = setTimeout(()=>{ isEditing = false; }, 1500);
 };
+
+window.setEditingTrue=function(){ isEditing=true; clearTimeout(renderDebounce); };
+window.setEditingFalse=function(){ clearTimeout(renderDebounce); renderDebounce=setTimeout(()=>{ isEditing=false; },1500); };
 
 function uid(){return 'j'+Date.now()+Math.floor(Math.random()*999);}
 
@@ -569,52 +579,64 @@ function renderOperator(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;">
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Order #</label>
-            <input type="text" value="${j.order}" onchange="window.updateField('${j.docId}','order',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="text" value="${j.order}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','order',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Saw</label>
-            <select onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:12px;padding:5px 8px;">${sawOpts}</select>
+            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:12px;padding:5px 8px;">${sawOpts}</select>
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Customer</label>
-            <input type="text" value="${j.customer||''}" onchange="window.updateField('${j.docId}','customer',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="text" value="${j.customer||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','customer',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Material & size</label>
-            <input type="text" value="${j.material||''}" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="text" value="${j.material||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Qty</label>
-            <input type="text" value="${j.qty||''}" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="text" value="${j.qty||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Length</label>
-            <input type="text" value="${j.length||''}" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="text" value="${j.length||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Est. cut time (min)</label>
-            <input type="number" value="${j.time||''}" onchange="window.updateField('${j.docId}','time',Number(this.value))" style="font-size:12px;padding:5px 8px;">
+            <input type="number" value="${j.time||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','time',Number(this.value))" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Due date</label>
-            <input type="text" value="${j.due||''}" onchange="window.updateField('${j.docId}','due',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="date" value="${j.due||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','due',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Salesperson</label>
-            <select onchange="window.updateField('${j.docId}','salesperson',this.value)" style="font-size:12px;padding:5px 8px;">${spOpts}</select>
+            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','salesperson',this.value)" style="font-size:12px;padding:5px 8px;">${spOpts}</select>
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Operator</label>
-            <select onchange="window.updateField('${j.docId}','operator',this.value)" style="font-size:12px;padding:5px 8px;">${opOpts}</select>
+            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','operator',this.value)" style="font-size:12px;padding:5px 8px;">${opOpts}</select>
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Risk</label>
-            <select onchange="window.updateField('${j.docId}','risk',this.value)" style="font-size:12px;padding:5px 8px;">${riskOpts}</select>
+            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','risk',this.value)" style="font-size:12px;padding:5px 8px;">${riskOpts}</select>
           </div>
           <div>
             <label style="font-size:11px;color:#999;margin-bottom:3px;">Special instructions</label>
-            <input type="text" value="${j.notes||''}" onchange="window.updateField('${j.docId}','notes',this.value)" style="font-size:12px;padding:5px 8px;">
+            <input type="text" value="${j.notes||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','notes',this.value)" style="font-size:12px;padding:5px 8px;">
           </div>
+        </div>
+
+        <!-- Timer -->
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9f9f9;border-radius:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;min-width:72px;letter-spacing:1px;" id="timer-display-${j.docId}">${formatTimer(j.timerElapsed||0)}</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn" id="timer-start-${j.docId}" style="font-size:12px;padding:5px 12px;background:#065F46;color:#fff;border-color:#065F46;" onclick="window.startTimer('${j.docId}')" ${j.timerRunning?'style="display:none"':''}>▶ Start</button>
+            <button class="btn" id="timer-pause-${j.docId}" style="font-size:12px;padding:5px 12px;background:#B45309;color:#fff;border-color:#B45309;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸ Pause</button>
+            <button class="btn" id="timer-reset-${j.docId}" style="font-size:12px;padding:5px 12px;" onclick="window.resetTimer('${j.docId}')">↺ Reset</button>
+          </div>
+          ${j.timerRunning?`<span style="font-size:11px;color:#065F46;font-weight:500;">● Running</span>`:(j.timerElapsed>0?`<span style="font-size:11px;color:#999;">Paused</span>`:'')}
+          ${j.actualTime?`<span style="font-size:11px;color:#666;margin-left:auto;">Actual: <strong>${formatTimer(j.actualTime)}</strong></span>`:''}
         </div>
 
         <!-- Status + Complete -->
@@ -683,6 +705,7 @@ function renderHistory(){
       <span style="font-size:11px;color:#aaa;">
         ${j.salesperson?`SP: ${j.salesperson}`:''} ${j.operator?`· Op: ${j.operator}`:''}
         ${j.risk?`· ${riskBadge(j.risk)}`:''}
+        ${j.actualTime?`· <strong>Actual: ${formatTimer(j.actualTime)}</strong>`:''}
       </span>
       <button class="btn" style="font-size:11px;padding:3px 10px;color:#B45309;border-color:#FCD34D;" onclick="window.reactivateJob('${j.docId}')">↩ Reactivate</button>
     </div>`).join('');
@@ -750,7 +773,24 @@ window.setPct=async function(docId,val){
 };
 
 window.completeJob=async function(docId){
-  await updateDoc(doc(db,'jobs',docId),{status:'done',pct:100,completedAt:Date.now()});
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j) return;
+  // Stop timer and capture actual time
+  let actualTime = j.timerElapsed||0;
+  if(j.timerRunning){
+    const now=Date.now();
+    actualTime=(j.timerElapsed||0)+(now-(j.timerStart||now));
+    clearInterval(timerIntervals[docId]);
+    delete timerIntervals[docId];
+  }
+  await updateDoc(doc(db,'jobs',docId),{
+    status:'done',
+    pct:100,
+    completedAt:Date.now(),
+    timerRunning:false,
+    timerElapsed:actualTime,
+    actualTime:actualTime
+  });
 };
 
 window.toggleRush=async function(docId){
@@ -771,7 +811,8 @@ window.addJob=async function(){
   const qty=document.getElementById('f-qty').value;
   const length=document.getElementById('f-length').value.trim();
   const time=document.getElementById('f-time').value;
-  const due=document.getElementById('f-due').value.trim();
+  const dueRaw=document.getElementById('f-due').value;
+  const due=dueRaw?new Date(dueRaw+'T00:00:00').toLocaleDateString([],{month:'numeric',day:'numeric'}):'';
   const notes=document.getElementById('f-notes').value.trim();
   const rush=document.getElementById('f-rush').checked;
   const risk=document.getElementById('f-risk').value;
@@ -794,7 +835,7 @@ window.addJob=async function(){
 };
 
 window.clearForm=function(keepMsg){
-  ['f-order','f-customer','f-material','f-qty','f-length','f-time','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>document.getElementById(id).value='');
+  ['f-order','f-customer','f-material','f-qty','f-length','f-time','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-rush').checked=false;
   document.getElementById('f-risk').value='';
   document.getElementById('f-salesperson').value='';
@@ -862,6 +903,7 @@ function renderArchive(){
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.material||'—'}${j.length?' '+j.length:''}</td>
       <td>${j.qty||'—'}</td>
       <td>${Math.round(j.time||0)} min</td>
+      <td>${j.actualTime?formatTimer(j.actualTime):'—'}</td>
       <td>${j.salesperson||'—'}</td>
       <td>${j.operator||'—'}</td>
       <td>${j.risk?riskBadge(j.risk):'—'}</td>
@@ -869,6 +911,75 @@ function renderArchive(){
       <td><button class="btn" style="font-size:11px;padding:3px 8px;white-space:nowrap;color:#B45309;border-color:#FCD34D;" onclick="window.reactivateJob('${j.docId}')">↩ Reactivate</button></td>
     </tr>`).join('');
 }
+
+// ── TIMER ENGINE ──────────────────────────────────────────
+const timerIntervals = {}; // docId -> intervalId
+
+function formatTimer(ms){
+  if(!ms) return '00:00:00';
+  const totalSec = Math.floor(ms/1000);
+  const h = Math.floor(totalSec/3600);
+  const m = Math.floor((totalSec%3600)/60);
+  const s = totalSec%60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function tickTimer(docId){
+  const j = jobs.find(j=>j.docId===docId);
+  if(!j||!j.timerRunning) return;
+  const now = Date.now();
+  const elapsed = (j.timerElapsed||0) + (now - (j.timerStart||now));
+  const display = document.getElementById('timer-display-'+docId);
+  if(display) display.textContent = formatTimer(elapsed);
+}
+
+window.startTimer=async function(docId){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j||j.timerRunning) return;
+  const now=Date.now();
+  await updateDoc(doc(db,'jobs',docId),{timerRunning:true, timerStart:now});
+  // Start local tick
+  if(timerIntervals[docId]) clearInterval(timerIntervals[docId]);
+  timerIntervals[docId]=setInterval(()=>tickTimer(docId),1000);
+  // Update button visibility
+  const startBtn=document.getElementById('timer-start-'+docId);
+  const pauseBtn=document.getElementById('timer-pause-'+docId);
+  if(startBtn) startBtn.style.display='none';
+  if(pauseBtn) pauseBtn.style.display='inline-flex';
+  // Auto-set status to cutting
+  if(j.status==='queued') await updateDoc(doc(db,'jobs',docId),{status:'cutting'});
+};
+
+window.pauseTimer=async function(docId){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j||!j.timerRunning) return;
+  const now=Date.now();
+  const elapsed=(j.timerElapsed||0)+(now-(j.timerStart||now));
+  clearInterval(timerIntervals[docId]);
+  delete timerIntervals[docId];
+  await updateDoc(doc(db,'jobs',docId),{timerRunning:false, timerElapsed:elapsed, timerStart:null});
+  const startBtn=document.getElementById('timer-start-'+docId);
+  const pauseBtn=document.getElementById('timer-pause-'+docId);
+  if(startBtn) startBtn.style.display='inline-flex';
+  if(pauseBtn) pauseBtn.style.display='none';
+};
+
+window.resetTimer=async function(docId){
+  if(!confirm('Reset this timer to zero?')) return;
+  clearInterval(timerIntervals[docId]);
+  delete timerIntervals[docId];
+  await updateDoc(doc(db,'jobs',docId),{timerRunning:false, timerElapsed:0, timerStart:null, actualTime:null});
+};
+
+// Resume any running timers after page load / re-render
+function resumeRunningTimers(){
+  jobs.forEach(j=>{
+    if(j.timerRunning && j.docId && !timerIntervals[j.docId]){
+      timerIntervals[j.docId]=setInterval(()=>tickTimer(j.docId),1000);
+    }
+  });
+}
+// ── END TIMER ENGINE ───────────────────────────────────────
 
 window.reactivateJob=async function(docId){
   if(!confirm('Reactivate this job? It will move back to the queue on the Operator input tab.')) return;
@@ -884,13 +995,14 @@ window.exportArchiveCSV=function(){
   const rows = jobs.filter(j=>j.status==='done'&&j.completedAt&&j.completedAt>=twelveMonthsAgo)
     .sort((a,b)=>b.completedAt-a.completedAt);
   if(!rows.length){alert('No archived jobs to export.');return;}
-  const headers = ['Order #','Saw','Customer','Material','Length','Qty','Est. Time (min)','Due','Salesperson','Operator','Risk','Rush','Notes','Completed'];
+  const headers = ['Order #','Saw','Customer','Material','Length','Qty','Est. Time (min)','Actual Time','Due','Salesperson','Operator','Risk','Rush','Notes','Completed'];
   const csv = [headers.join(','),
     ...rows.map(j=>[
       j.order,j.saw,j.customer,
       `"${(j.material||'').replace(/"/g,'""')}"`,
       j.length||'',j.qty||'',
       Math.round(j.time||0),
+      j.actualTime?formatTimer(j.actualTime):'',
       j.due||'',j.salesperson||'',j.operator||'',
       j.risk||'',j.rush?'Yes':'No',
       `"${(j.notes||'').replace(/"/g,'""')}"`,
@@ -924,12 +1036,16 @@ function parseExcelPaste(raw){
     const risk      = r[13]||'';
     const timeEst   = (r[15]||'').replace(/,/g,'');
     const comments  = r[17]||'';
-    // Format due date MM/DD
+    // Format due date as YYYY-MM-DD for date input, display as M/D
     let due='';
     if(shipDate){
       const d=new Date(shipDate);
-      if(!isNaN(d)) due=`${d.getMonth()+1}/${d.getDate()}`;
-      else due=shipDate;
+      if(!isNaN(d)){
+        const y=d.getFullYear();
+        const m=String(d.getMonth()+1).padStart(2,'0');
+        const day=String(d.getDate()).padStart(2,'0');
+        due=`${y}-${m}-${day}`;
+      } else due=shipDate;
     }
     // Normalize risk
     let riskNorm='';
@@ -1048,7 +1164,8 @@ window.confirmImport=async function(){
 const q = query(jobsRef, orderBy('added'));
 onSnapshot(q, (snapshot) => {
   jobs = snapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
-  renderAll();
+  if(!isEditing) renderAll();
+  resumeRunningTimers();
 });
 </script>
 </body>
