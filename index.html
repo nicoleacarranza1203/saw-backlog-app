@@ -238,57 +238,63 @@
     </div>
 
     <div class="card">
-      <div style="font-weight:500;font-size:13px;margin-bottom:12px;">Add new job to queue</div>
-      <div class="form-grid">
-        <div><label>Order #</label><input type="text" id="f-order" placeholder="e.g. SO-4821"></div>
-        <div><label>Saw</label><select id="f-saw"></select></div>
-        <div><label>Customer</label><input type="text" id="f-customer" placeholder="Customer name"></div>
-        <div><label>Material & size</label><input type="text" id="f-material" placeholder='e.g. 1" RD HR'></div>
-        <div><label>Qty</label><input type="number" id="f-qty" placeholder="pcs" min="1"></div>
-        <div><label>Length</label><input type="text" id="f-length" placeholder='e.g. 24"'></div>
-        <div><label>Est. cut time (min)</label><input type="number" id="f-time" placeholder="min" min="1"></div>
-        <div><label>Due date</label><input type="date" id="f-due"></div>
-        <div>
-          <label>Risk</label>
-          <select id="f-risk">
-            <option value="">Select...</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-          </select>
-        </div>
-        <div>
-          <label>Salesperson</label>
-          <select id="f-salesperson">
-            <option value="">Select...</option>
-            <option>NC</option><option>HM</option><option>MT</option><option>MR</option>
-            <option>IC</option><option>HK</option><option>TD</option><option>TS</option>
-            <option value="__custom_sp__">Other (type below)</option>
-          </select>
-          <input type="text" id="f-salesperson-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
-        </div>
-        <div>
-          <label>Operator</label>
-          <select id="f-operator">
-            <option value="">Select...</option>
-            <option>EG</option><option>MM</option><option>ELG</option>
-            <option value="__custom_op__">Other (type below)</option>
-          </select>
-          <input type="text" id="f-operator-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
-        </div>
-        <div class="span2"><label>Special instructions</label><input type="text" id="f-notes" placeholder="Tolerance, finish, hold for inspection, etc."></div>
-        <div class="span2">
-          <label class="rush-toggle">
-            <input type="checkbox" id="f-rush">
-            <span>Mark as rush order — sorted to top of queue</span>
-          </label>
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="window.toggleAddForm()">
+        <span style="font-weight:500;font-size:13px;">Add new job to queue</span>
+        <span id="add-form-arrow" style="font-size:12px;color:#aaa;">▼</span>
       </div>
-      <div style="display:flex;gap:8px;margin-top:14px;">
-        <button class="btn btn-primary" onclick="addJob()">Add to queue</button>
-        <button class="btn" onclick="clearForm()">Clear</button>
+      <div id="add-form-body" style="display:none;">
+        <div style="height:12px;"></div>
+        <div class="form-grid">
+          <div><label>Order #</label><input type="text" id="f-order" placeholder="e.g. SO-4821"></div>
+          <div><label>Saw</label><select id="f-saw"></select></div>
+          <div><label>Customer</label><input type="text" id="f-customer" placeholder="Customer name"></div>
+          <div><label>Material & size</label><input type="text" id="f-material" placeholder='e.g. 1" RD HR'></div>
+          <div><label>Qty</label><input type="number" id="f-qty" placeholder="pcs" min="1"></div>
+          <div><label>Length</label><input type="text" id="f-length" placeholder='e.g. 24"'></div>
+          <div><label>Est. cut time (min)</label><input type="number" id="f-time" placeholder="min" min="1"></div>
+          <div><label>Due date</label><input type="date" id="f-due"></div>
+          <div>
+            <label>Risk</label>
+            <select id="f-risk">
+              <option value="">Select...</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div>
+            <label>Salesperson</label>
+            <select id="f-salesperson">
+              <option value="">Select...</option>
+              <option>NC</option><option>HM</option><option>MT</option><option>MR</option>
+              <option>IC</option><option>HK</option><option>TD</option><option>TS</option>
+              <option value="__custom_sp__">Other (type below)</option>
+            </select>
+            <input type="text" id="f-salesperson-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
+          </div>
+          <div>
+            <label>Operator</label>
+            <select id="f-operator">
+              <option value="">Select...</option>
+              <option>EG</option><option>MM</option><option>ELG</option>
+              <option value="__custom_op__">Other (type below)</option>
+            </select>
+            <input type="text" id="f-operator-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
+          </div>
+          <div class="span2"><label>Special instructions</label><input type="text" id="f-notes" placeholder="Tolerance, finish, hold for inspection, etc."></div>
+          <div class="span2">
+            <label class="rush-toggle">
+              <input type="checkbox" id="f-rush">
+              <span>Mark as rush order — sorted to top of queue</span>
+            </label>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn btn-primary" onclick="addJob()">Add to queue</button>
+          <button class="btn" onclick="clearForm()">Clear</button>
+        </div>
+        <div id="form-msg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
       </div>
-      <div id="form-msg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
     </div>
     <div class="card">
       <div style="font-weight:500;font-size:13px;margin-bottom:10px;">Update job status</div>
@@ -392,6 +398,14 @@ const PROG_OPTS = [0,25,50,75,100];
 let jobs = [];
 let opSawFilter = 'all';
 const expandedCards = new Set();
+
+window.toggleAddForm=function(){
+  const body=document.getElementById('add-form-body');
+  const arrow=document.getElementById('add-form-arrow');
+  const isOpen=body.style.display!=='none';
+  body.style.display=isOpen?'none':'block';
+  arrow.textContent=isOpen?'▼':'▲';
+};
 
 window.toggleCard=function(docId){
   if(expandedCards.has(docId)) expandedCards.delete(docId);
@@ -568,6 +582,8 @@ function renderOperator(){
         ${j.risk?riskBadge(j.risk):''}
         ${statusBadge(j.status)}
         <span style="font-size:12px;color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.saw} · ${j.customer} · ${j.material}${j.length?' '+j.length:''}</span>
+        ${j.timerRunning?`<span id="collapsed-timer-${j.docId}" style="font-size:12px;font-weight:600;color:#065F46;white-space:nowrap;font-variant-numeric:tabular-nums;">● ${formatTimer((j.timerElapsed||0)+(Date.now()-(j.timerStart||Date.now())))}</span>`
+        :(j.timerElapsed>0?`<span style="font-size:12px;color:#999;white-space:nowrap;font-variant-numeric:tabular-nums;">⏸ ${formatTimer(j.timerElapsed)}</span>`:'') }
         <span style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Due ${j.due||'—'} · ${pct}%</span>
       </div>
 
@@ -831,6 +847,10 @@ window.addJob=async function(){
   msg.style.color=rush?'#A32D2D':'#065F46';
   msg.textContent=`${order} added to ${saw} queue${rush?' as a rush order':''}.`;
   clearForm(true);
+  // Collapse the form after adding
+  const body=document.getElementById('add-form-body');
+  const arrow=document.getElementById('add-form-arrow');
+  if(body){body.style.display='none';arrow.textContent='▼';}
   setTimeout(()=>msg.textContent='',3000);
 };
 
@@ -929,8 +949,13 @@ function tickTimer(docId){
   if(!j||!j.timerRunning) return;
   const now = Date.now();
   const elapsed = (j.timerElapsed||0) + (now - (j.timerStart||now));
+  const formatted = formatTimer(elapsed);
+  // Update expanded timer display
   const display = document.getElementById('timer-display-'+docId);
-  if(display) display.textContent = formatTimer(elapsed);
+  if(display) display.textContent = formatted;
+  // Update collapsed timer display
+  const collapsed = document.getElementById('collapsed-timer-'+docId);
+  if(collapsed) collapsed.textContent = '● '+formatted;
 }
 
 window.startTimer=async function(docId){
