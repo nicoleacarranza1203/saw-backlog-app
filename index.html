@@ -700,11 +700,13 @@ function renderHistory(){
   document.getElementById('hist-date').textContent=today.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   const bizDayStart=getLastBusinessDayStart();
   const done=jobs.filter(j=>j.status==='done'&&j.completedAt&&j.completedAt>=bizDayStart);
-  const totalTime=done.reduce((a,j)=>a+Number(j.time||0),0);
+  // Use actual timer time if available, fall back to estimated
+  const totalActual=done.reduce((a,j)=>a+(j.actualTime||0),0);
+  const hasActual=done.some(j=>j.actualTime>0);
   const rushDone=done.filter(j=>j.rush).length;
   document.getElementById('hist-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Completed today</div><div class="metric-val ok">${done.length}</div></div>
-    <div class="metric"><div class="metric-label">Total cut time</div><div class="metric-val">${Math.round(totalTime)} min</div></div>
+    <div class="metric"><div class="metric-label">Total actual cut time</div><div class="metric-val">${hasActual?formatTimer(totalActual):'—'}</div></div>
     <div class="metric"><div class="metric-label">Rush completed</div><div class="metric-val">${rushDone}</div></div>
   `;
   const rows=document.getElementById('hist-rows');
@@ -714,14 +716,14 @@ function renderHistory(){
       <span style="font-weight:500;">${j.order}${j.rush?' '+rushBadge():''}</span>
       <span>${j.saw}</span>
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.customer} · ${j.material}</span>
-      <span>${Math.round(j.time)} min</span>
+      <span>${j.actualTime?formatTimer(j.actualTime):'—'}</span>
       <span style="color:#666;">${j.completedAt?new Date(j.completedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'-'}</span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;padding:0 0 8px 2px;border-bottom:1px solid #f0f0f0;margin-bottom:4px;">
       <span style="font-size:11px;color:#aaa;">
         ${j.salesperson?`SP: ${j.salesperson}`:''} ${j.operator?`· Op: ${j.operator}`:''}
         ${j.risk?`· ${riskBadge(j.risk)}`:''}
-        ${j.actualTime?`· <strong>Actual: ${formatTimer(j.actualTime)}</strong>`:''}
+        ${j.time?`· Est: ${Math.round(j.time)} min`:''}
       </span>
       <button class="btn" style="font-size:11px;padding:3px 10px;color:#B45309;border-color:#FCD34D;" onclick="window.reactivateJob('${j.docId}')">↩ Reactivate</button>
     </div>`).join('');
