@@ -212,8 +212,8 @@
       </div>
       <div style="overflow-x:auto;">
         <table class="job-table">
-          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:46px"><col style="width:90px"><col style="width:60px"><col style="width:36px"><col style="width:36px"><col style="width:55px"></colgroup>
-          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>SP</th><th>Op</th><th>Risk</th></tr></thead>
+          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:52px"><col style="width:90px"><col style="width:60px"><col style="width:55px"><col style="width:72px"><col style="width:55px"></colgroup>
+          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>Est. Time</th><th>Clock</th><th>Risk</th></tr></thead>
           <tbody id="dash-jobs"></tbody>
         </table>
       </div>
@@ -355,9 +355,9 @@
       <!-- Results -->
       <div style="overflow-x:auto;">
         <table class="job-table" id="archive-table">
-          <colgroup><col style="width:88px"><col style="width:82px"><col style="width:95px"><col style="width:105px"><col style="width:46px"><col style="width:52px"><col style="width:52px"><col style="width:36px"><col style="width:36px"><col style="width:52px"><col style="width:82px"><col style="width:76px"></colgroup>
+          <colgroup><col style="width:88px"><col style="width:82px"><col style="width:95px"><col style="width:105px"><col style="width:46px"><col style="width:80px"><col style="width:80px"><col style="width:36px"><col style="width:36px"><col style="width:52px"><col style="width:82px"><col style="width:76px"></colgroup>
           <thead><tr>
-            <th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Est.</th><th>Actual</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th><th></th>
+            <th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Est. (min)</th><th>Actual (min)</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th><th></th>
           </tr></thead>
           <tbody id="archive-rows"></tbody>
         </table>
@@ -536,19 +536,38 @@ function renderDashboard(){
   visible=sortJobs(visible);
   const tbody=document.getElementById('dash-jobs');
   if(!visible.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">No active jobs</td></tr>`;return;}
-  tbody.innerHTML=visible.map(j=>`
+  tbody.innerHTML=visible.map(j=>{
+    const shortDue = j.due ? (() => {
+      // Handle both YYYY-MM-DD and M/D formats
+      const d = new Date(j.due.includes('-') ? j.due+'T00:00:00' : j.due);
+      return isNaN(d) ? j.due : d.toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'});
+    })() : '—';
+    // Live clock: show running timer, paused timer, or — 
+    const liveClockId = `dash-clock-${j.docId}`;
+    let clockDisplay;
+    if(j.timerRunning){
+      const elapsed=(j.timerElapsed||0)+(Date.now()-(j.timerStart||Date.now()));
+      clockDisplay=`<span id="${liveClockId}" style="font-size:11px;font-weight:600;color:#065F46;font-variant-numeric:tabular-nums;">● ${formatTimer(elapsed)}</span>`;
+    } else if(j.timerElapsed>0){
+      clockDisplay=`<span style="font-size:11px;color:#999;font-variant-numeric:tabular-nums;">⏸ ${formatTimer(j.timerElapsed)}</span>`;
+    } else {
+      clockDisplay=`<span style="font-size:11px;color:#ccc;">—</span>`;
+    }
+    return `
     <tr class="${j.rush?'rush-row':''}">
       <td style="padding:8px 4px;">${j.rush?`<div style="width:3px;height:20px;background:#E24B4A;border-radius:2px;"></div>`:''}</td>
       <td style="font-weight:500;">${j.order}${j.rush?' '+rushBadge():''}</td>
       <td>${j.saw}</td><td>${j.customer}</td>
       <td>${j.material}${j.length?' · '+j.length:''}</td>
-      <td>${j.qty||'—'}</td><td>${j.due||'—'}</td>
+      <td>${j.qty||'—'}</td>
+      <td style="white-space:nowrap;">${shortDue}</td>
       <td>${progBar(j.pct||0)}</td>
       <td>${statusBadge(j.status)}</td>
-      <td style="font-size:11px;color:#666;">${j.salesperson||'—'}</td>
-      <td style="font-size:11px;color:#666;">${j.operator||'—'}</td>
+      <td style="font-size:11px;color:#666;">${j.time?Math.round(j.time)+' min':'—'}</td>
+      <td>${clockDisplay}</td>
       <td>${j.risk?riskBadge(j.risk):'—'}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 function renderOperator(){
@@ -924,7 +943,7 @@ function renderArchive(){
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.customer||'—'}</td>
       <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.material||'—'}${j.length?' '+j.length:''}</td>
       <td>${j.qty||'—'}</td>
-      <td>${Math.round(j.time||0)} min</td>
+      <td>${j.time?Math.round(j.time)+' min':'—'}</td>
       <td>${j.actualTime?formatTimer(j.actualTime):'—'}</td>
       <td>${j.salesperson||'—'}</td>
       <td>${j.operator||'—'}</td>
@@ -955,9 +974,12 @@ function tickTimer(docId){
   // Update expanded timer display
   const display = document.getElementById('timer-display-'+docId);
   if(display) display.textContent = formatted;
-  // Update collapsed timer display
+  // Update collapsed operator card timer
   const collapsed = document.getElementById('collapsed-timer-'+docId);
   if(collapsed) collapsed.textContent = '● '+formatted;
+  // Update dashboard clock column
+  const dashClock = document.getElementById('dash-clock-'+docId);
+  if(dashClock) dashClock.textContent = '● '+formatted;
 }
 
 window.startTimer=async function(docId){
