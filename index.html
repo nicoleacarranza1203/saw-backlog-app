@@ -244,14 +244,10 @@
       </div>
       <div id="add-form-body" style="display:none;">
         <div style="height:12px;"></div>
+        <!-- Order-level fields -->
         <div class="form-grid">
           <div><label>Order #</label><input type="text" id="f-order" placeholder="e.g. SO-4821"></div>
-          <div><label>Saw</label><select id="f-saw"></select></div>
           <div><label>Customer</label><input type="text" id="f-customer" placeholder="Customer name"></div>
-          <div><label>Material & size</label><input type="text" id="f-material" placeholder='e.g. 1" RD HR'></div>
-          <div><label>Qty</label><input type="number" id="f-qty" placeholder="pcs" min="1"></div>
-          <div><label>Length</label><input type="text" id="f-length" placeholder='e.g. 24"'></div>
-          <div><label>Est. cut time (min)</label><input type="number" id="f-time" placeholder="min" min="1"></div>
           <div><label>Due date</label><input type="date" id="f-due"></div>
           <div>
             <label>Risk</label>
@@ -289,6 +285,16 @@
             </label>
           </div>
         </div>
+
+        <!-- Line items -->
+        <div style="margin-top:14px;border-top:1px solid #e5e5e5;padding-top:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-size:12px;font-weight:500;color:#666;">Cut lines</span>
+            <button class="btn" style="font-size:12px;padding:4px 12px;" onclick="window.addFormLine()">+ Add line</button>
+          </div>
+          <div id="f-lines-container"></div>
+        </div>
+
         <div style="display:flex;gap:8px;margin-top:14px;">
           <button class="btn btn-primary" onclick="addJob()">Add to queue</button>
           <button class="btn" onclick="clearForm()">Clear</button>
@@ -405,6 +411,8 @@ window.toggleAddForm=function(){
   const isOpen=body.style.display!=='none';
   body.style.display=isOpen?'none':'block';
   arrow.textContent=isOpen?'▼':'▲';
+  // Initialize with one blank line if opening and no lines yet
+  if(!isOpen && formLines.length===0) window.addFormLine();
 };
 
 window.toggleCard=function(docId){
@@ -572,8 +580,6 @@ function renderDashboard(){
 
 function renderOperator(){
   window.renderOperator=renderOperator;
-  const sawSel=document.getElementById('f-saw');
-  if(!sawSel.options.length) SAWS_ALL.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;sawSel.appendChild(o);});
   const fbDiv=document.getElementById('saw-filter-btns');
   fbDiv.innerHTML=`<button class="btn ${opSawFilter==='all'?'btn-primary':''}" style="font-size:12px;padding:4px 10px;" onclick="window.setSawFilter('all')">All</button>`
     +SAWS_ALL.map(s=>`<button class="btn ${opSawFilter===s?'btn-primary':''}" style="font-size:12px;padding:4px 10px;" onclick="window.setSawFilter('${s}')">${s}</button>`).join('');
@@ -582,125 +588,192 @@ function renderOperator(){
   visible=sortJobs(visible);
   const el=document.getElementById('op-jobs');
   if(!visible.length){el.innerHTML=`<div class="empty">${searchTerm?`No jobs matching "${searchTerm}"`:('No active jobs'+(opSawFilter!=='all'?' for '+opSawFilter:''))}</div>`;return;}
-  el.innerHTML=visible.map(j=>{
-    const pct=j.pct||0;
-    const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
-    const isExpanded = expandedCards.has(j.docId);
-    const sawOpts = SAWS_ALL.map(s=>`<option value="${s}" ${j.saw===s?'selected':''}>${s}</option>`).join('');
-    const spOpts = ['','NC','HM','MT','MR','IC','HK','TD','TS'].map(s=>`<option value="${s}" ${j.salesperson===s?'selected':''}>${s||'Select...'}</option>`).join('');
-    const opOpts = ['','EG','MM','ELG'].map(s=>`<option value="${s}" ${j.operator===s?'selected':''}>${s||'Select...'}</option>`).join('');
-    const riskOpts = ['','Low','Medium','High'].map(s=>`<option value="${s}" ${j.risk===s?'selected':''}>${s||'Select...'}</option>`).join('');
 
-    return `<div class="card-sm ${j.rush?'rush':''}" id="card-${j.docId}">
+  // Group by orderKey (or order for legacy jobs)
+  const orderMap = new Map();
+  visible.forEach(j=>{
+    const key = j.orderKey||j.order;
+    if(!orderMap.has(key)) orderMap.set(key,[]);
+    orderMap.get(key).push(j);
+  });
 
-      <!-- COLLAPSED SUMMARY ROW -->
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window.toggleCard('${j.docId}')">
-        <span style="font-size:12px;color:#aaa;flex-shrink:0;">${isExpanded?'▲':'▼'}</span>
-        <span style="font-weight:500;font-size:13px;min-width:80px;">${j.order}</span>
-        ${j.rush?rushBadge():''}
-        ${j.risk?riskBadge(j.risk):''}
-        ${statusBadge(j.status)}
-        <span style="font-size:12px;color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.saw} · ${j.customer} · ${j.material}${j.length?' '+j.length:''}</span>
-        ${j.timerRunning?`<span id="collapsed-timer-${j.docId}" style="font-size:12px;font-weight:600;color:#065F46;white-space:nowrap;font-variant-numeric:tabular-nums;">● ${formatTimer((j.timerElapsed||0)+(Date.now()-(j.timerStart||Date.now())))}</span>`
-        :(j.timerElapsed>0?`<span style="font-size:12px;color:#999;white-space:nowrap;font-variant-numeric:tabular-nums;">⏸ ${formatTimer(j.timerElapsed)}</span>`:'') }
-        <span style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Due ${j.due||'—'} · ${pct}%</span>
-      </div>
+  el.innerHTML = [...orderMap.entries()].map(([orderKey, lines])=>{
+    const first = lines[0];
+    const isMulti = lines.length > 1;
+    const isExpanded = expandedCards.has(orderKey);
+    const allRunning = lines.filter(j=>j.timerRunning);
+    const totalElapsed = lines.reduce((a,j)=>{
+      if(j.timerRunning) return a+(j.timerElapsed||0)+(Date.now()-(j.timerStart||Date.now()));
+      return a+(j.timerElapsed||0);
+    },0);
+    const anyRunning = allRunning.length>0;
+    const anyPaused = !anyRunning && lines.some(j=>(j.timerElapsed||0)>0);
 
-      <!-- EXPANDED DETAIL + EDIT -->
-      ${isExpanded?`
+    // Order-level summary badges
+    const linesDone = lines.filter(j=>j.status==='done').length;
+    const linesCutting = lines.filter(j=>j.status==='cutting').length;
+    const linesQueued = lines.filter(j=>j.status==='queued').length;
+
+    // Collapsed summary row
+    const summaryBadge = isMulti
+      ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 7px;border-radius:20px;font-weight:500;">${lines.length} lines</span>`
+      : statusBadge(first.status);
+    const progressSummary = isMulti
+      ? `${linesDone}/${lines.length} done`
+      : `${first.pct||0}%`;
+    const timerSummary = anyRunning
+      ? `<span id="collapsed-timer-${orderKey}" style="font-size:12px;font-weight:600;color:#065F46;white-space:nowrap;font-variant-numeric:tabular-nums;">● ${formatTimer(totalElapsed)}</span>`
+      : anyPaused
+        ? `<span style="font-size:12px;color:#999;white-space:nowrap;font-variant-numeric:tabular-nums;">⏸ ${formatTimer(totalElapsed)}</span>`
+        : '';
+
+    // Single-line expanded card (legacy style)
+    const singleLineExpanded = ()=>{
+      const j = first;
+      const pct=j.pct||0;
+      const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
+      const sawOpts=SAWS_ALL.map(s=>`<option value="${s}" ${j.saw===s?'selected':''}>${s}</option>`).join('');
+      const spOpts=['','NC','HM','MT','MR','IC','HK','TD','TS'].map(s=>`<option value="${s}" ${j.salesperson===s?'selected':''}>${s||'Select...'}</option>`).join('');
+      const opOpts=['','EG','MM','ELG'].map(s=>`<option value="${s}" ${j.operator===s?'selected':''}>${s||'Select...'}</option>`).join('');
+      const riskOpts=['','Low','Medium','High'].map(s=>`<option value="${s}" ${j.risk===s?'selected':''}>${s||'Select...'}</option>`).join('');
+      return `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #ebebeb;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;">
+            <div><label style="font-size:11px;color:#999;">Order #</label><input type="text" value="${j.order}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','order',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Saw</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:12px;padding:5px 8px;">${sawOpts}</select></div>
+            <div><label style="font-size:11px;color:#999;">Customer</label><input type="text" value="${j.customer||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','customer',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Material & size</label><input type="text" value="${j.material||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Qty</label><input type="text" value="${j.qty||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Length</label><input type="text" value="${j.length||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Est. cut time (min)</label><input type="number" value="${j.time||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','time',Number(this.value))" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Due date</label><input type="date" value="${j.due||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','due',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Salesperson</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','salesperson',this.value)" style="font-size:12px;padding:5px 8px;">${spOpts}</select></div>
+            <div><label style="font-size:11px;color:#999;">Operator</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','operator',this.value)" style="font-size:12px;padding:5px 8px;">${opOpts}</select></div>
+            <div><label style="font-size:11px;color:#999;">Risk</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','risk',this.value)" style="font-size:12px;padding:5px 8px;">${riskOpts}</select></div>
+            <div><label style="font-size:11px;color:#999;">Special instructions</label><input type="text" value="${j.notes||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','notes',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9f9f9;border-radius:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span style="font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;min-width:72px;" id="timer-display-${j.docId}">${formatTimer(j.timerElapsed||0)}</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn" id="timer-start-${j.docId}" style="font-size:12px;padding:5px 12px;background:#065F46;color:#fff;border-color:#065F46;${j.timerRunning?'display:none':''}" onclick="window.startTimer('${j.docId}')">▶ Start</button>
+              <button class="btn" id="timer-pause-${j.docId}" style="font-size:12px;padding:5px 12px;background:#B45309;color:#fff;border-color:#B45309;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸ Pause</button>
+              <button class="btn" id="timer-reset-${j.docId}" style="font-size:12px;padding:5px 12px;" onclick="window.resetTimer('${j.docId}')">↺ Reset</button>
+            </div>
+            ${j.timerRunning?`<span style="font-size:11px;color:#065F46;font-weight:500;">● Running</span>`:(j.timerElapsed>0?`<span style="font-size:11px;color:#999;">Paused</span>`:'')}
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+            <div class="status-btns">
+              <button class="status-btn ${j.status==='queued'?'sel-queue':''}" onclick="window.setStatus('${j.docId}','queued')">Queued</button>
+              <button class="status-btn ${j.status==='cutting'?'sel-cutting':''}" onclick="window.setStatus('${j.docId}','cutting')">Cutting</button>
+              <button class="status-btn ${j.status==='hold'?'sel-hold':''}" onclick="window.setStatus('${j.docId}','hold')">On hold</button>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-rush ${j.rush?'active-rush':''}" onclick="window.toggleRush('${j.docId}')">${j.rush?'Remove rush':'Mark rush'}</button>
+              <button class="btn btn-complete" onclick="window.completeJob('${j.docId}')">✓ Complete</button>
+              <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeJob('${j.docId}')">Remove</button>
+            </div>
+          </div>
+          <div class="progress-row">
+            <span class="progress-label">% Complete:</span>
+            <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
+              ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
+            </select>
+            <div style="flex:1;">${progBar(pct)}</div>
+          </div>
+        </div>`;
+    };
+
+    // Multi-line expanded sub-table
+    const multiLineExpanded = ()=>`
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #ebebeb;">
-
-        <!-- Editable fields grid -->
+        <!-- Order-level editable fields -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;">
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Order #</label>
-            <input type="text" value="${j.order}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','order',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Saw</label>
-            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:12px;padding:5px 8px;">${sawOpts}</select>
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Customer</label>
-            <input type="text" value="${j.customer||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','customer',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Material & size</label>
-            <input type="text" value="${j.material||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Qty</label>
-            <input type="text" value="${j.qty||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Length</label>
-            <input type="text" value="${j.length||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Est. cut time (min)</label>
-            <input type="number" value="${j.time||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','time',Number(this.value))" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Due date</label>
-            <input type="date" value="${j.due||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','due',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Salesperson</label>
-            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','salesperson',this.value)" style="font-size:12px;padding:5px 8px;">${spOpts}</select>
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Operator</label>
-            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','operator',this.value)" style="font-size:12px;padding:5px 8px;">${opOpts}</select>
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Risk</label>
-            <select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','risk',this.value)" style="font-size:12px;padding:5px 8px;">${riskOpts}</select>
-          </div>
-          <div>
-            <label style="font-size:11px;color:#999;margin-bottom:3px;">Special instructions</label>
-            <input type="text" value="${j.notes||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','notes',this.value)" style="font-size:12px;padding:5px 8px;">
-          </div>
+          <div><label style="font-size:11px;color:#999;">Customer</label><input type="text" value="${first.customer||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateOrderField('${orderKey}','customer',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+          <div><label style="font-size:11px;color:#999;">Due date</label><input type="date" value="${first.due||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateOrderField('${orderKey}','due',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+          <div><label style="font-size:11px;color:#999;">Salesperson</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateOrderField('${orderKey}','salesperson',this.value)" style="font-size:12px;padding:5px 8px;">${['','NC','HM','MT','MR','IC','HK','TD','TS'].map(s=>`<option value="${s}" ${first.salesperson===s?'selected':''}>${s||'Select...'}</option>`).join('')}</select></div>
+          <div><label style="font-size:11px;color:#999;">Risk</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateOrderField('${orderKey}','risk',this.value)" style="font-size:12px;padding:5px 8px;">${['','Low','Medium','High'].map(s=>`<option value="${s}" ${first.risk===s?'selected':''}>${s||'Select...'}</option>`).join('')}</select></div>
+          <div style="grid-column:span 2;"><label style="font-size:11px;color:#999;">Special instructions</label><input type="text" value="${first.notes||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateOrderField('${orderKey}','notes',this.value)" style="font-size:12px;padding:5px 8px;"></div>
         </div>
-
-        <!-- Timer -->
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9f9f9;border-radius:8px;margin-bottom:10px;flex-wrap:wrap;">
-          <span style="font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;min-width:72px;letter-spacing:1px;" id="timer-display-${j.docId}">${formatTimer(j.timerElapsed||0)}</span>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="btn" id="timer-start-${j.docId}" style="font-size:12px;padding:5px 12px;background:#065F46;color:#fff;border-color:#065F46;" onclick="window.startTimer('${j.docId}')" ${j.timerRunning?'style="display:none"':''}>▶ Start</button>
-            <button class="btn" id="timer-pause-${j.docId}" style="font-size:12px;padding:5px 12px;background:#B45309;color:#fff;border-color:#B45309;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸ Pause</button>
-            <button class="btn" id="timer-reset-${j.docId}" style="font-size:12px;padding:5px 12px;" onclick="window.resetTimer('${j.docId}')">↺ Reset</button>
-          </div>
-          ${j.timerRunning?`<span style="font-size:11px;color:#065F46;font-weight:500;">● Running</span>`:(j.timerElapsed>0?`<span style="font-size:11px;color:#999;">Paused</span>`:'')}
-          ${j.actualTime?`<span style="font-size:11px;color:#666;margin-left:auto;">Actual: <strong>${formatTimer(j.actualTime)}</strong></span>`:''}
+        <!-- Combined timer -->
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0faf6;border-radius:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:#065F46;font-weight:500;">Order total:</span>
+          <span id="order-timer-${orderKey}" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:#065F46;">${formatTimer(totalElapsed)}</span>
+          <span style="font-size:11px;color:#999;margin-left:auto;">${linesDone}/${lines.length} lines complete</span>
         </div>
-
-        <!-- Status + Complete -->
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-          <div class="status-btns">
-            <button class="status-btn ${j.status==='queued'?'sel-queue':''}" onclick="window.setStatus('${j.docId}','queued')">Queued</button>
-            <button class="status-btn ${j.status==='cutting'?'sel-cutting':''}" onclick="window.setStatus('${j.docId}','cutting')">Cutting</button>
-            <button class="status-btn ${j.status==='hold'?'sel-hold':''}" onclick="window.setStatus('${j.docId}','hold')">On hold</button>
-          </div>
+        <!-- Lines sub-table -->
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#f5f5f5;">
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">#</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Saw</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Material</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Qty</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Length</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Est.</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Timer</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Progress</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Status</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;"></th>
+            </tr></thead>
+            <tbody>
+              ${lines.map((j,li)=>{
+                const pct=j.pct||0;
+                const sawOpts=SAWS_ALL.map(s=>`<option value="${s}" ${j.saw===s?'selected':''}>${s}</option>`).join('');
+                return `<tr style="border-bottom:1px solid #f0f0f0;${j.status==='done'?'opacity:0.6':''}">
+                  <td style="padding:6px 8px;font-weight:500;color:#666;">L${j.lineNum||li+1}</td>
+                  <td style="padding:4px 6px;"><select onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;">${sawOpts}</select></td>
+                  <td style="padding:4px 6px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><input type="text" value="${j.material||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;width:100%;"></td>
+                  <td style="padding:4px 6px;"><input type="text" value="${j.qty||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;width:60px;"></td>
+                  <td style="padding:4px 6px;"><input type="text" value="${j.length||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;width:60px;"></td>
+                  <td style="padding:6px 8px;white-space:nowrap;">${j.time?j.time+' min':'—'}</td>
+                  <td style="padding:4px 6px;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <span id="timer-display-${j.docId}" style="font-size:11px;font-variant-numeric:tabular-nums;min-width:56px;font-weight:500;${j.timerRunning?'color:#065F46':'color:#999'}">${formatTimer(j.timerElapsed||0)}</span>
+                      <button id="timer-start-${j.docId}" style="font-size:11px;padding:2px 6px;border:1px solid #065F46;background:#065F46;color:#fff;border-radius:4px;cursor:pointer;${j.timerRunning?'display:none':''}" onclick="window.startTimer('${j.docId}')">▶</button>
+                      <button id="timer-pause-${j.docId}" style="font-size:11px;padding:2px 6px;border:1px solid #B45309;background:#B45309;color:#fff;border-radius:4px;cursor:pointer;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸</button>
+                    </div>
+                  </td>
+                  <td style="padding:4px 6px;min-width:80px;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <select onchange="window.setPct('${j.docId}',this.value)" style="font-size:11px;padding:2px 5px;border:1px solid #d0d0d0;border-radius:4px;">
+                        ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
+                      </select>
+                    </div>
+                  </td>
+                  <td style="padding:4px 6px;">${statusBadge(j.status)}</td>
+                  <td style="padding:4px 6px;">
+                    ${j.status!=='done'
+                      ? `<button class="btn btn-complete" style="font-size:11px;padding:3px 8px;" onclick="window.completeJob('${j.docId}')">✓</button>`
+                      : `<span style="font-size:11px;color:#065F46;">✓ Done</span>`}
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:6px;">
           <div style="display:flex;gap:6px;">
-            <button class="btn btn-rush ${j.rush?'active-rush':''}" onclick="window.toggleRush('${j.docId}')">${j.rush?'Remove rush':'Mark rush'}</button>
-            <button class="btn btn-complete" onclick="window.completeJob('${j.docId}')">✓ Complete</button>
-            <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeJob('${j.docId}')">Remove</button>
+            <button class="btn btn-rush ${first.rush?'active-rush':''}" onclick="window.toggleRushOrder('${orderKey}')">${first.rush?'Remove rush':'Mark rush'}</button>
+            <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeOrder('${orderKey}')">Remove order</button>
           </div>
         </div>
+      </div>`;
 
-        <!-- Progress -->
-        <div class="progress-row">
-          <span class="progress-label">% Complete:</span>
-          <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
-            ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
-          </select>
-          <div style="flex:1;">${progBar(pct)}</div>
-        </div>
-      </div>`:''}
+    return `<div class="card-sm ${first.rush?'rush':''}" id="card-${orderKey}">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="window.toggleCard('${orderKey}')">
+        <span style="font-size:12px;color:#aaa;flex-shrink:0;">${isExpanded?'▲':'▼'}</span>
+        <span style="font-weight:500;font-size:13px;min-width:80px;">${orderKey}</span>
+        ${first.rush?rushBadge():''}
+        ${first.risk?riskBadge(first.risk):''}
+        ${summaryBadge}
+        <span style="font-size:12px;color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${first.customer}${isMulti?` · ${linesCutting} cutting, ${linesQueued} queued`:` · ${first.saw} · ${first.material}${first.length?' '+first.length:''}`}</span>
+        ${timerSummary}
+        <span style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Due ${first.due||'—'} · ${progressSummary}</span>
+      </div>
+      ${isExpanded ? (isMulti ? multiLineExpanded() : singleLineExpanded()) : ''}
     </div>`;
   }).join('');
 }
-
 function getLastBusinessDayStart(){
   const now=new Date();
   const d=new Date(now.getFullYear(),now.getMonth(),now.getDate(),0,0,0,0);
@@ -809,25 +882,60 @@ window.setPct=async function(docId,val){
   await updateDoc(doc(db,'jobs',docId),updates);
 };
 
+// Update all lines in an order with a shared field
+window.updateOrderField=async function(orderKey, field, value){
+  isEditing=true;
+  const orderLines=jobs.filter(j=>(j.orderKey||j.order)===orderKey);
+  const batch=writeBatch(db);
+  orderLines.forEach(j=>batch.update(doc(db,'jobs',j.docId),{[field]:value}));
+  await batch.commit();
+  clearTimeout(renderDebounce);
+  renderDebounce=setTimeout(()=>{isEditing=false;},1500);
+};
+
+window.toggleRushOrder=async function(orderKey){
+  const orderLines=jobs.filter(j=>(j.orderKey||j.order)===orderKey);
+  if(!orderLines.length) return;
+  const newRush=!orderLines[0].rush;
+  const batch=writeBatch(db);
+  orderLines.forEach(j=>batch.update(doc(db,'jobs',j.docId),{rush:newRush}));
+  await batch.commit();
+};
+
+window.removeOrder=async function(orderKey){
+  if(!confirm(`Remove all lines for order ${orderKey}? This cannot be undone.`)) return;
+  const orderLines=jobs.filter(j=>(j.orderKey||j.order)===orderKey);
+  const batch=writeBatch(db);
+  orderLines.forEach(j=>batch.delete(doc(db,'jobs',j.docId)));
+  await batch.commit();
+};
+
 window.completeJob=async function(docId){
   const j=jobs.find(j=>j.docId===docId);
   if(!j) return;
-  // Stop timer and capture actual time
-  let actualTime = j.timerElapsed||0;
+  let actualTime=j.timerElapsed||0;
   if(j.timerRunning){
     const now=Date.now();
     actualTime=(j.timerElapsed||0)+(now-(j.timerStart||now));
     clearInterval(timerIntervals[docId]);
     delete timerIntervals[docId];
   }
-  await updateDoc(doc(db,'jobs',docId),{
-    status:'done',
-    pct:100,
-    completedAt:Date.now(),
-    timerRunning:false,
-    timerElapsed:actualTime,
-    actualTime:actualTime
-  });
+  await updateDoc(doc(db,'jobs',docId),{status:'done',pct:100,completedAt:Date.now(),timerRunning:false,timerElapsed:actualTime,actualTime});
+  // Check if all lines of this order are now done
+  const orderKey=j.orderKey||j.order;
+  const orderLines=jobs.filter(l=>(l.orderKey||l.order)===orderKey);
+  const allDone=orderLines.every(l=>l.docId===docId||l.status==='done');
+  if(allDone && orderLines.length>1){
+    // Brief notification
+    const el=document.getElementById('op-jobs');
+    if(el){
+      const note=document.createElement('div');
+      note.style.cssText='position:fixed;top:20px;right:20px;background:#065F46;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;z-index:999;box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+      note.textContent=`✓ All lines for ${orderKey} are complete!`;
+      document.body.appendChild(note);
+      setTimeout(()=>note.remove(),3000);
+    }
+  }
 };
 
 window.toggleRush=async function(docId){
@@ -840,16 +948,61 @@ window.removeJob=async function(docId){
   await deleteDoc(doc(db,'jobs',docId));
 };
 
+// ── MULTI-LINE FORM ────────────────────────────────────────
+let formLines = [];
+let formLineCounter = 0;
+
+function sawSelectHtml(id, val){
+  return `<select id="${id}" style="font-size:12px;padding:5px 8px;width:100%;">${SAWS_ALL.map(s=>`<option value="${s}" ${s===(val||'Unassigned')?'selected':''}>${s}</option>`).join('')}</select>`;
+}
+
+function renderFormLines(){
+  const container = document.getElementById('f-lines-container');
+  if(!container) return;
+  if(!formLines.length){container.innerHTML='';return;}
+  container.innerHTML = formLines.map((l,i)=>`
+    <div style="background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:500;color:#666;">Line ${i+1}</span>
+        ${formLines.length>1?`<button class="btn btn-danger" style="font-size:11px;padding:2px 8px;" onclick="window.removeFormLine(${l.id})">Remove</button>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;">
+        <div><label style="font-size:11px;color:#999;">Saw</label>${sawSelectHtml('fl-saw-'+l.id,l.saw)}</div>
+        <div><label style="font-size:11px;color:#999;">Material & size</label><input type="text" id="fl-material-${l.id}" value="${l.material||''}" placeholder='e.g. 1" RD HR' style="font-size:12px;padding:5px 8px;"></div>
+        <div><label style="font-size:11px;color:#999;">Qty</label><input type="number" id="fl-qty-${l.id}" value="${l.qty||''}" placeholder="pcs" min="1" style="font-size:12px;padding:5px 8px;"></div>
+        <div><label style="font-size:11px;color:#999;">Length</label><input type="text" id="fl-length-${l.id}" value="${l.length||''}" placeholder='e.g. 24"' style="font-size:12px;padding:5px 8px;"></div>
+        <div style="grid-column:span 2;"><label style="font-size:11px;color:#999;">Est. cut time (min)</label><input type="number" id="fl-time-${l.id}" value="${l.time||''}" placeholder="min" min="1" style="font-size:12px;padding:5px 8px;"></div>
+      </div>
+    </div>`).join('');
+}
+
+window.addFormLine=function(){
+  formLineCounter++;
+  formLines.push({id:formLineCounter,saw:'Unassigned',material:'',qty:'',length:'',time:''});
+  renderFormLines();
+};
+
+window.removeFormLine=function(lineId){
+  formLines=formLines.filter(l=>l.id!==lineId);
+  renderFormLines();
+};
+
+function collectFormLines(){
+  return formLines.map(l=>({
+    saw:document.getElementById('fl-saw-'+l.id)?.value||'Unassigned',
+    material:document.getElementById('fl-material-'+l.id)?.value.trim()||'',
+    qty:document.getElementById('fl-qty-'+l.id)?.value||'',
+    length:document.getElementById('fl-length-'+l.id)?.value.trim()||'',
+    time:Number(document.getElementById('fl-time-'+l.id)?.value)||0,
+  }));
+}
+// ── END MULTI-LINE FORM ────────────────────────────────────
+
 window.addJob=async function(){
   const order=document.getElementById('f-order').value.trim();
-  const saw=document.getElementById('f-saw').value;
   const customer=document.getElementById('f-customer').value.trim();
-  const material=document.getElementById('f-material').value.trim();
-  const qty=document.getElementById('f-qty').value;
-  const length=document.getElementById('f-length').value.trim();
-  const time=document.getElementById('f-time').value;
   const dueRaw=document.getElementById('f-due').value;
-  const due=dueRaw?new Date(dueRaw+'T00:00:00').toLocaleDateString([],{month:'numeric',day:'numeric'}):'';
+  const due=dueRaw?new Date(dueRaw+'T00:00:00').toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'}):'';
   const notes=document.getElementById('f-notes').value.trim();
   const rush=document.getElementById('f-rush').checked;
   const risk=document.getElementById('f-risk').value;
@@ -857,32 +1010,50 @@ window.addJob=async function(){
   const salesperson=spSel==='__custom_sp__'?document.getElementById('f-salesperson-custom').value.trim():spSel;
   const opSel=document.getElementById('f-operator').value;
   const operator=opSel==='__custom_op__'?document.getElementById('f-operator-custom').value.trim():opSel;
-  if(!order||!customer||!material||!time){
-    const msg=document.getElementById('form-msg');
+  const msg=document.getElementById('form-msg');
+  if(!order||!customer){
     msg.style.color='#991B1B';
-    msg.textContent='Please fill in order #, customer, material, and cut time.';
+    msg.textContent='Please fill in Order # and Customer.';
     return;
   }
-  await addDoc(jobsRef,{id:uid(),order,saw,customer,material,qty,length,time:Number(time),due,notes,rush,risk,salesperson,operator,pct:0,status:'queued',added:Date.now(),completedAt:null});
-  const msg=document.getElementById('form-msg');
-  msg.style.color=rush?'#A32D2D':'#065F46';
-  msg.textContent=`${order} added to ${saw} queue${rush?' as a rush order':''}.`;
-  clearForm(true);
-  // Collapse the form after adding
-  const body=document.getElementById('add-form-body');
-  const arrow=document.getElementById('add-form-arrow');
-  if(body){body.style.display='none';arrow.textContent='▼';}
-  setTimeout(()=>msg.textContent='',3000);
+  const lines=collectFormLines();
+  if(!lines.length){
+    msg.style.color='#991B1B';
+    msg.textContent='Please add at least one cut line.';
+    return;
+  }
+  const orderData={orderKey:order,order,customer,due,notes,rush,risk,salesperson,operator,isMultiLine:lines.length>1};
+  try{
+    const batch=writeBatch(db);
+    const now=Date.now();
+    lines.forEach((l,i)=>{
+      const ref=doc(jobsRef);
+      batch.set(ref,{...orderData,id:uid(),lineNum:i+1,totalLines:lines.length,saw:l.saw,material:l.material,qty:l.qty,length:l.length,time:l.time,pct:0,status:'queued',timerRunning:false,timerElapsed:0,timerStart:null,actualTime:null,added:now+(i*10),completedAt:null});
+    });
+    await batch.commit();
+    msg.style.color=rush?'#A32D2D':'#065F46';
+    msg.textContent=`${order} added with ${lines.length} line${lines.length>1?'s':''} to queue${rush?' as a rush order':''}.`;
+    clearForm(true);
+    const body=document.getElementById('add-form-body');
+    const arrow=document.getElementById('add-form-arrow');
+    if(body){body.style.display='none';arrow.textContent='▼';}
+    setTimeout(()=>msg.textContent='',3000);
+  } catch(err){
+    msg.style.color='#991B1B';
+    msg.textContent='Error saving — '+err.message;
+  }
 };
 
 window.clearForm=function(keepMsg){
-  ['f-order','f-customer','f-material','f-qty','f-length','f-time','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['f-order','f-customer','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-rush').checked=false;
   document.getElementById('f-risk').value='';
   document.getElementById('f-salesperson').value='';
   document.getElementById('f-operator').value='';
   document.getElementById('f-salesperson-custom').style.display='none';
   document.getElementById('f-operator-custom').style.display='none';
+  formLines=[];formLineCounter=0;renderFormLines();
+  window.addFormLine();
   if(!keepMsg)document.getElementById('form-msg').textContent='';
 };
 
@@ -966,20 +1137,34 @@ function formatTimer(ms){
 }
 
 function tickTimer(docId){
-  const j = jobs.find(j=>j.docId===docId);
+  const j=jobs.find(j=>j.docId===docId);
   if(!j||!j.timerRunning) return;
-  const now = Date.now();
-  const elapsed = (j.timerElapsed||0) + (now - (j.timerStart||now));
-  const formatted = formatTimer(elapsed);
+  const now=Date.now();
+  const elapsed=(j.timerElapsed||0)+(now-(j.timerStart||now));
+  const formatted=formatTimer(elapsed);
   // Update expanded timer display
-  const display = document.getElementById('timer-display-'+docId);
-  if(display) display.textContent = formatted;
+  const display=document.getElementById('timer-display-'+docId);
+  if(display) display.textContent=formatted;
   // Update collapsed operator card timer
-  const collapsed = document.getElementById('collapsed-timer-'+docId);
-  if(collapsed) collapsed.textContent = '● '+formatted;
+  const collapsed=document.getElementById('collapsed-timer-'+docId);
+  if(collapsed) collapsed.textContent='● '+formatted;
   // Update dashboard clock column
-  const dashClock = document.getElementById('dash-clock-'+docId);
-  if(dashClock) dashClock.textContent = '● '+formatted;
+  const dashClock=document.getElementById('dash-clock-'+docId);
+  if(dashClock) dashClock.textContent='● '+formatted;
+  // Update order-level total timer
+  const orderKey=j.orderKey||j.order;
+  const orderTimerEl=document.getElementById('order-timer-'+orderKey);
+  if(orderTimerEl){
+    const orderLines=jobs.filter(l=>(l.orderKey||l.order)===orderKey);
+    const total=orderLines.reduce((a,l)=>{
+      if(l.timerRunning) return a+(l.timerElapsed||0)+(now-(l.timerStart||now));
+      return a+(l.timerElapsed||0);
+    },0);
+    orderTimerEl.textContent=formatTimer(total);
+    // Also update collapsed order timer
+    const collapsedOrder=document.getElementById('collapsed-timer-'+orderKey);
+    if(collapsedOrder) collapsedOrder.textContent='● '+formatTimer(total);
+  }
 }
 
 window.startTimer=async function(docId){
@@ -1170,43 +1355,60 @@ window.confirmImport=async function(){
   try{
     const batch=writeBatch(db);
     const now=Date.now();
-    pendingImports.forEach((j,i)=>{
-      const ref=doc(jobsRef);
-      batch.set(ref,{
-        id:uid(),
-        order:j.order,
-        saw:j.saw||'Unassigned',
-        customer:j.customer,
-        material:j.material,
-        qty:j.qty,
-        length:'',
-        time:Number(j.time)||0,
-        due:j.due,
-        notes:j.notes,
-        rush:j.rush||false,
-        risk:j.risk||'',
-        salesperson:j.salesperson||'',
-        operator:'',
-        pct:0,
-        status:'queued',
-        added:now+(i*10),
-        completedAt:null
+    // Group by order number
+    const orderGroups=new Map();
+    pendingImports.forEach(j=>{
+      if(!orderGroups.has(j.order)) orderGroups.set(j.order,[]);
+      orderGroups.get(j.order).push(j);
+    });
+    let docCount=0;
+    orderGroups.forEach((lines,orderNum)=>{
+      const first=lines[0];
+      lines.forEach((j,i)=>{
+        const ref=doc(jobsRef);
+        batch.set(ref,{
+          id:uid(),
+          orderKey:orderNum,
+          order:orderNum,
+          customer:j.customer,
+          material:j.material,
+          qty:j.qty,
+          length:'',
+          time:Number(j.time)||0,
+          due:j.due,
+          notes:j.notes,
+          rush:j.rush||false,
+          risk:j.risk||'',
+          salesperson:j.salesperson||'',
+          operator:'',
+          saw:j.saw||'Unassigned',
+          lineNum:i+1,
+          totalLines:lines.length,
+          isMultiLine:lines.length>1,
+          pct:0,
+          status:'queued',
+          timerRunning:false,
+          timerElapsed:0,
+          timerStart:null,
+          actualTime:null,
+          added:now+(docCount*10),
+          completedAt:null
+        });
+        docCount++;
       });
     });
     await batch.commit();
-    const count=pendingImports.length;
+    const orderCount=orderGroups.size;
+    const lineCount=pendingImports.length;
     msg.style.color='#065F46';
-    msg.textContent=`✓ ${count} job${count>1?'s':''} added to queue successfully!`;
+    msg.textContent=`✓ ${orderCount} order${orderCount>1?'s':''} (${lineCount} line${lineCount>1?'s':''}) added to queue!`;
     document.getElementById('paste-input').value='';
     pendingImports=[];
-    setTimeout(()=>{
-      document.getElementById('paste-preview').innerHTML='';
-      msg.textContent='';
-    },3000);
+    setTimeout(()=>{document.getElementById('paste-preview').innerHTML='';msg.textContent='';},3000);
   } catch(err){
     console.error(err);
     msg.style.color='#991B1B';
-    msg.textContent='Error saving — check your connection and try again. Details: '+err.message;
+    msg.textContent='Error saving — '+err.message;
   }
 };
 // ── END PASTE IMPORT ───────────────────────────────────────
