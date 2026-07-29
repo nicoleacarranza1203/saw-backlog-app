@@ -171,6 +171,7 @@
     <button class="tab" onclick="showTab('operator',event)">Operator input</button>
     <button class="tab" onclick="showTab('history',event)">Daily summary</button>
     <button class="tab" onclick="showTab('archive',event)">Archive</button>
+    <button class="tab" onclick="showTab('admin',event)">Admin</button>
   </div>
 
   <!-- Mobile bottom nav -->
@@ -213,7 +214,7 @@
       <div style="overflow-x:auto;">
         <table class="job-table">
           <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:52px"><col style="width:90px"><col style="width:60px"><col style="width:55px"><col style="width:72px"><col style="width:55px"></colgroup>
-          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>Est. Time</th><th>Clock</th><th>Risk</th></tr></thead>
+          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Part #</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>Est. Time</th><th>Clock</th><th>Risk</th></tr></thead>
           <tbody id="dash-jobs"></tbody>
         </table>
       </div>
@@ -363,7 +364,7 @@
         <table class="job-table" id="archive-table">
           <colgroup><col style="width:88px"><col style="width:82px"><col style="width:95px"><col style="width:105px"><col style="width:46px"><col style="width:80px"><col style="width:80px"><col style="width:36px"><col style="width:36px"><col style="width:52px"><col style="width:82px"><col style="width:76px"></colgroup>
           <thead><tr>
-            <th>Order #</th><th>Saw</th><th>Customer</th><th>Material</th><th>Qty</th><th>Est. (min)</th><th>Actual (min)</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th><th></th>
+            <th>Order #</th><th>Saw</th><th>Customer</th><th>Part #</th><th>Qty</th><th>Est. (min)</th><th>Actual (min)</th><th>SP</th><th>Op</th><th>Risk</th><th>Completed</th><th></th>
           </tr></thead>
           <tbody id="archive-rows"></tbody>
         </table>
@@ -374,6 +375,22 @@
       </div>
     </div>
   </div>
+
+  <!-- ADMIN TAB -->
+  <div id="tab-admin" class="section">
+    <div class="card">
+      <div style="font-weight:500;font-size:13px;margin-bottom:4px;">Admin tools</div>
+      <div style="font-size:12px;color:#999;margin-bottom:16px;">One-time maintenance actions for the saw cutting backlog.</div>
+
+      <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">⚙️ Rename Hemsaw → Amada</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">Updates all existing jobs in Firebase that are assigned to "Hemsaw" to use the new name "Amada". This is a one-time action — existing completed jobs in the archive will also be updated.</div>
+        <button class="btn" style="background:#B45309;color:#fff;border-color:#B45309;font-size:13px;" onclick="window.migrateHemsaw()">Run migration</button>
+        <div id="migrate-msg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script type="module">
@@ -384,12 +401,12 @@ import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot
 // PASTE YOUR FIREBASE CONFIG HERE
 // =============================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDMmKyhemdTIp5syZQzRRbiTXyaWXUPHoc",
-  authDomain: "saw-cutting-backlog.firebaseapp.com",
-  projectId: "saw-cutting-backlog",
-  storageBucket: "saw-cutting-backlog.firebasestorage.app",
-  messagingSenderId: "726399374142",
-  appId: "1:726399374142:web:4def0b279e5c90c331126f"
+  apiKey: "AIzaSyDdSa9Qw290Dc1vmwziRRwmJCc3c5yg5ns",
+  authDomain: "bergsen-portal.firebaseapp.com",
+  projectId: "bergsen-portal",
+  storageBucket: "bergsen-portal.firebasestorage.app",
+  messagingSenderId: "909576598503",
+  appId: "1:909576598503:web:0dcd68a61739e4587e4342"
 };
 // =============================================
 
@@ -397,8 +414,8 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 const jobsRef = collection(db, 'jobs');
 
-const SAWS = ['Coldsaw','Hyd-Mech','Hemsaw','Chop saw'];
-const SAWS_ALL = ['Unassigned','Coldsaw','Hyd-Mech','Hemsaw','Chop saw'];
+const SAWS = ['Coldsaw','Hyd-Mech','Amada','Chop saw'];
+const SAWS_ALL = ['Unassigned','Coldsaw','Hyd-Mech','Amada','Chop saw'];
 const MAX_MIN = 480;
 const PROG_OPTS = [0,25,50,75,100];
 let jobs = [];
@@ -441,11 +458,67 @@ window.setEditingFalse=function(){ clearTimeout(renderDebounce); renderDebounce=
 
 function uid(){return 'j'+Date.now()+Math.floor(Math.random()*999);}
 
+function getNextBusinessDay(){
+  const d=new Date();
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()+1);
+  // Skip weekends
+  if(d.getDay()===6) d.setDate(d.getDate()+2); // Saturday → Monday
+  if(d.getDay()===0) d.setDate(d.getDate()+1); // Sunday → Monday
+  return d;
+}
+
+function isDueNextBusinessDay(dueStr){
+  if(!dueStr) return false;
+  const due=new Date(dueStr.includes('-')?dueStr+'T00:00:00':dueStr);
+  if(isNaN(due)) return false;
+  const nbd=getNextBusinessDay();
+  return due.toDateString()===nbd.toDateString();
+}
+
+function isDueToday(dueStr){
+  if(!dueStr) return false;
+  const due=new Date(dueStr.includes('-')?dueStr+'T00:00:00':dueStr);
+  if(isNaN(due)) return false;
+  return due.toDateString()===new Date().toDateString();
+}
+
+function isDueOverdue(dueStr){
+  if(!dueStr) return false;
+  const due=new Date(dueStr.includes('-')?dueStr+'T00:00:00':dueStr);
+  if(isNaN(due)) return false;
+  const today=new Date();today.setHours(0,0,0,0);
+  return due<today;
+}
+
+function formatDue(due){
+  if(!due)return'—';
+  const d=new Date(due.includes('-')?due+'T00:00:00':due);
+  return isNaN(d)?due:d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+}
+  if(!dueStr) return Infinity;
+  const d=new Date(dueStr.includes('-')?dueStr+'T00:00:00':dueStr);
+  return isNaN(d)?Infinity:d.getTime();
+}
+
+function dueDateStyle(dueStr){
+  if(isDueOverdue(dueStr)) return 'color:#991B1B;font-weight:700;';
+  if(isDueToday(dueStr)) return 'color:#991B1B;font-weight:600;';
+  if(isDueNextBusinessDay(dueStr)) return 'color:#C2410C;font-weight:600;';
+  return '';
+}
+
 function sortJobs(arr){
   return arr.slice().sort((a,b)=>{
+    // Rush always first
     if(a.rush!==b.rush) return a.rush?-1:1;
+    // Then currently cutting
     if(a.status==='cutting'&&b.status!=='cutting') return -1;
     if(b.status==='cutting'&&a.status!=='cutting') return 1;
+    // Then sort by due date ascending (earliest first)
+    const da=parseDueDate(a.due);
+    const db=parseDueDate(b.due);
+    if(da!==db) return da-db;
     return 0;
   });
 }
@@ -546,10 +619,14 @@ function renderDashboard(){
   if(!visible.length){tbody.innerHTML=`<tr><td colspan="9" class="empty">No active jobs</td></tr>`;return;}
   tbody.innerHTML=visible.map(j=>{
     const shortDue = j.due ? (() => {
-      // Handle both YYYY-MM-DD and M/D formats
       const d = new Date(j.due.includes('-') ? j.due+'T00:00:00' : j.due);
-      return isNaN(d) ? j.due : d.toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'});
+      return isNaN(d) ? j.due : d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     })() : '—';
+    const dueStyle=dueDateStyle(j.due);
+    const dueTip=isDueOverdue(j.due)?'Overdue!':isDueToday(j.due)?'Due today!':isDueNextBusinessDay(j.due)?'Due next business day!':'';
+    const dueCellContent=dueStyle
+      ?`<span style="${dueStyle}" title="${dueTip}">${dueTip?'⚠ ':''}${shortDue}</span>`
+      :shortDue;
     // Live clock: show running timer, paused timer, or — 
     const liveClockId = `dash-clock-${j.docId}`;
     let clockDisplay;
@@ -568,7 +645,7 @@ function renderDashboard(){
       <td>${j.saw}</td><td>${j.customer}</td>
       <td>${j.material}${j.length?' · '+j.length:''}</td>
       <td>${j.qty||'—'}</td>
-      <td style="white-space:nowrap;">${shortDue}</td>
+      <td style="white-space:nowrap;">${dueCellContent}</td>
       <td>${progBar(j.pct||0)}</td>
       <td>${statusBadge(j.status)}</td>
       <td style="font-size:11px;color:#666;">${j.time?Math.round(j.time)+' min':'—'}</td>
@@ -642,7 +719,7 @@ function renderOperator(){
             <div><label style="font-size:11px;color:#999;">Order #</label><input type="text" value="${j.order}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','order',this.value)" style="font-size:12px;padding:5px 8px;"></div>
             <div><label style="font-size:11px;color:#999;">Saw</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:12px;padding:5px 8px;">${sawOpts}</select></div>
             <div><label style="font-size:11px;color:#999;">Customer</label><input type="text" value="${j.customer||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','customer',this.value)" style="font-size:12px;padding:5px 8px;"></div>
-            <div><label style="font-size:11px;color:#999;">Material & size</label><input type="text" value="${j.material||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;"></div>
+            <div><label style="font-size:11px;color:#999;">Part #</label><input type="text" value="${j.material||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','material',this.value)" style="font-size:12px;padding:5px 8px;"></div>
             <div><label style="font-size:11px;color:#999;">Qty</label><input type="text" value="${j.qty||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:12px;padding:5px 8px;"></div>
             <div><label style="font-size:11px;color:#999;">Length</label><input type="text" value="${j.length||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:12px;padding:5px 8px;"></div>
             <div><label style="font-size:11px;color:#999;">Est. cut time (min)</label><input type="number" value="${j.time||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','time',Number(this.value))" style="font-size:12px;padding:5px 8px;"></div>
@@ -768,7 +845,7 @@ function renderOperator(){
         ${summaryBadge}
         <span style="font-size:12px;color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${first.customer}${isMulti?` · ${linesCutting} cutting, ${linesQueued} queued`:` · ${first.saw} · ${first.material}${first.length?' '+first.length:''}`}</span>
         ${timerSummary}
-        <span style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Due ${first.due||'—'} · ${progressSummary}</span>
+        <span style="font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0;">Due <span style="${dueDateStyle(first.due)}">${formatDue(first.due)}</span> · ${progressSummary}</span>
       </div>
       ${isExpanded ? (isMulti ? multiLineExpanded() : singleLineExpanded()) : ''}
     </div>`;
@@ -968,7 +1045,7 @@ function renderFormLines(){
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;">
         <div><label style="font-size:11px;color:#999;">Saw</label>${sawSelectHtml('fl-saw-'+l.id,l.saw)}</div>
-        <div><label style="font-size:11px;color:#999;">Material & size</label><input type="text" id="fl-material-${l.id}" value="${l.material||''}" placeholder='e.g. 1" RD HR' style="font-size:12px;padding:5px 8px;"></div>
+        <div><label style="font-size:11px;color:#999;">Part #</label><input type="text" id="fl-material-${l.id}" value="${l.material||''}" placeholder='e.g. 1" RD HR' style="font-size:12px;padding:5px 8px;"></div>
         <div><label style="font-size:11px;color:#999;">Qty</label><input type="number" id="fl-qty-${l.id}" value="${l.qty||''}" placeholder="pcs" min="1" style="font-size:12px;padding:5px 8px;"></div>
         <div><label style="font-size:11px;color:#999;">Length</label><input type="text" id="fl-length-${l.id}" value="${l.length||''}" placeholder='e.g. 24"' style="font-size:12px;padding:5px 8px;"></div>
         <div style="grid-column:span 2;"><label style="font-size:11px;color:#999;">Est. cut time (min)</label><input type="number" id="fl-time-${l.id}" value="${l.time||''}" placeholder="min" min="1" style="font-size:12px;padding:5px 8px;"></div>
@@ -1044,7 +1121,28 @@ window.addJob=async function(){
   }
 };
 
-window.clearForm=function(keepMsg){
+window.migrateHemsaw=async function(){
+  const msg=document.getElementById('migrate-msg');
+  const allJobs=jobs.filter(j=>j.saw==='Hemsaw');
+  if(!allJobs.length){
+    msg.style.color='#065F46';
+    msg.textContent='✓ No jobs with "Hemsaw" found — nothing to update.';
+    return;
+  }
+  if(!confirm(`Found ${allJobs.length} job${allJobs.length>1?'s':''} assigned to Hemsaw. Rename all to Amada?`)) return;
+  msg.style.color='#666';
+  msg.textContent=`Updating ${allJobs.length} jobs...`;
+  try{
+    const batch=writeBatch(db);
+    allJobs.forEach(j=>batch.update(doc(db,'jobs',j.docId),{saw:'Amada'}));
+    await batch.commit();
+    msg.style.color='#065F46';
+    msg.textContent=`✓ Done — ${allJobs.length} job${allJobs.length>1?'s':''} updated from Hemsaw to Amada.`;
+  }catch(e){
+    msg.style.color='#991B1B';
+    msg.textContent='Error: '+e.message;
+  }
+};
   ['f-order','f-customer','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-rush').checked=false;
   document.getElementById('f-risk').value='';
@@ -1323,7 +1421,7 @@ window.previewPaste=function(){
           <td style="padding:6px 8px;">${j.customer}</td>
           <td style="padding:6px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${j.material}">${j.material}</td>
           <td style="padding:6px 8px;">${j.qty}</td>
-          <td style="padding:6px 8px;">${j.due}</td>
+          <td style="padding:6px 8px;">${formatDue(j.due)}</td>
           <td style="padding:6px 8px;">${j.salesperson}</td>
           <td style="padding:6px 8px;">${j.risk?riskBadge(j.risk):'—'}</td>
           <td style="padding:6px 8px;">${j.time||'—'}</td>
