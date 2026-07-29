@@ -494,7 +494,7 @@ function isDueOverdue(dueStr){
 function formatDue(due){
   if(!due)return'—';
   const d=new Date(due.includes('-')?due+'T00:00:00':due);
-  return isNaN(d)?due:d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  return isNaN(d)?due:d.toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'});
 }
 
 function parseDueDate(dueStr){
@@ -622,7 +622,7 @@ function renderDashboard(){
   tbody.innerHTML=visible.map(j=>{
     const shortDue = j.due ? (() => {
       const d = new Date(j.due.includes('-') ? j.due+'T00:00:00' : j.due);
-      return isNaN(d) ? j.due : d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+      return isNaN(d) ? j.due : d.toLocaleDateString([],{month:'numeric',day:'numeric',year:'2-digit'});
     })() : '—';
     const dueStyle=dueDateStyle(j.due);
     const dueTip=isDueOverdue(j.due)?'Overdue!':isDueToday(j.due)?'Due today!':isDueNextBusinessDay(j.due)?'Due next business day!':'';
@@ -1185,17 +1185,17 @@ function renderArchive(){
 
   let archived = jobs.filter(j=>{
     if(j.status!=='done') return false;
-    if(!j.completedAt) return false;
-    if(j.completedAt < twelveMonthsAgo) return false;
+    // Include jobs without completedAt (completed before timestamp tracking was added)
+    if(j.completedAt && j.completedAt < twelveMonthsAgo) return false;
     if(sawFilter && j.saw!==sawFilter) return false;
-    if(fromTs && j.completedAt < fromTs) return false;
-    if(toTs && j.completedAt > toTs) return false;
+    if(fromTs && j.completedAt && j.completedAt < fromTs) return false;
+    if(toTs && j.completedAt && j.completedAt > toTs) return false;
     if(search){
       const haystack = `${j.order} ${j.customer} ${j.salesperson} ${j.operator} ${j.material}`.toLowerCase();
       if(!haystack.includes(search)) return false;
     }
     return true;
-  }).sort((a,b)=>b.completedAt-a.completedAt);
+  }).sort((a,b)=>(b.completedAt||0)-(a.completedAt||0));
 
   document.getElementById('archive-count').textContent = `${archived.length} record${archived.length!==1?'s':''}`;
 
