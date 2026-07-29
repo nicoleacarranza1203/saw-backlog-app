@@ -496,6 +496,8 @@ function formatDue(due){
   const d=new Date(due.includes('-')?due+'T00:00:00':due);
   return isNaN(d)?due:d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric',year:'numeric'});
 }
+
+function parseDueDate(dueStr){
   if(!dueStr) return Infinity;
   const d=new Date(dueStr.includes('-')?dueStr+'T00:00:00':dueStr);
   return isNaN(d)?Infinity:d.getTime();
@@ -1143,6 +1145,8 @@ window.migrateHemsaw=async function(){
     msg.textContent='Error: '+e.message;
   }
 };
+
+window.clearForm=function(keepMsg){
   ['f-order','f-customer','f-due','f-notes','f-salesperson-custom','f-operator-custom'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('f-rush').checked=false;
   document.getElementById('f-risk').value='';
