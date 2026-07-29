@@ -164,6 +164,7 @@
 <body>
 <div class="app">
   <h1>⚙️ Saw Cutting Backlog</h1>
+  <div id="firebase-debug" style="font-size:11px;color:#999;margin-bottom:8px;padding:4px 8px;background:#f5f5f5;border-radius:4px;">Connecting to Firebase...</div>
 
   <!-- Desktop tab bar -->
   <div class="tab-bar" id="desktop-tabs">
@@ -1544,6 +1545,9 @@ const q = query(jobsRef);
 onSnapshot(q, (snapshot) => {
   jobs = snapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
   jobs.sort((a,b)=>(a.added||0)-(b.added||0));
+  // Debug counter — shows total jobs loaded from Firebase
+  const dbg=document.getElementById('firebase-debug');
+  if(dbg) dbg.textContent=`Firebase: ${jobs.length} total jobs loaded (${jobs.filter(j=>j.status==='done').length} done, ${jobs.filter(j=>j.status!=='done').length} active)`;
   if(!isEditing) renderAll();
   resumeRunningTimers();
 });
