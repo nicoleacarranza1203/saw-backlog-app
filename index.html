@@ -402,7 +402,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // =============================================
 // PASTE YOUR FIREBASE CONFIG HERE
@@ -1540,9 +1540,10 @@ window.confirmImport=async function(){
   }
 };
 // ── END PASTE IMPORT ───────────────────────────────────────
-const q = query(jobsRef, orderBy('added'));
+const q = query(jobsRef);
 onSnapshot(q, (snapshot) => {
   jobs = snapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
+  jobs.sort((a,b)=>(a.added||0)-(b.added||0));
   if(!isEditing) renderAll();
   resumeRunningTimers();
 });
