@@ -213,7 +213,7 @@
       </div>
       <div style="overflow-x:auto;">
         <table class="job-table">
-          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:52px"><col style="width:90px"><col style="width:60px"><col style="width:55px"><col style="width:72px"><col style="width:55px"></colgroup>
+          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:75px"><col style="width:90px"><col style="width:60px"><col style="width:55px"><col style="width:72px"><col style="width:55px"></colgroup>
           <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Part #</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>Est. Time</th><th>Clock</th><th>Risk</th></tr></thead>
           <tbody id="dash-jobs"></tbody>
         </table>
@@ -387,6 +387,13 @@
         <div style="font-size:12px;color:#666;margin-bottom:12px;">Updates all existing jobs in Firebase that are assigned to "Hemsaw" to use the new name "Amada". This is a one-time action — existing completed jobs in the archive will also be updated.</div>
         <button class="btn" style="background:#B45309;color:#fff;border-color:#B45309;font-size:13px;" onclick="window.migrateHemsaw()">Run migration</button>
         <div id="migrate-msg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+      </div>
+
+      <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">🗑 Remove test jobs</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">Removes the two test jobs with order numbers "123" and "1234" from Firebase permanently.</div>
+        <button class="btn" style="background:#991B1B;color:#fff;border-color:#991B1B;font-size:13px;" onclick="window.deleteTestJobs()">Delete test jobs</button>
+        <div id="delete-test-msg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
       </div>
     </div>
   </div>
@@ -1123,6 +1130,27 @@ window.addJob=async function(){
   }
 };
 
+window.deleteTestJobs=async function(){
+  const msg=document.getElementById('delete-test-msg');
+  const testJobs=jobs.filter(j=>j.order==='123'||j.order==='1234');
+  if(!testJobs.length){
+    msg.style.color='#065F46';
+    msg.textContent='✓ No test jobs found.';
+    return;
+  }
+  if(!confirm(`Delete ${testJobs.length} test job${testJobs.length>1?'s':''} (order# 123, 1234) permanently?`)) return;
+  try{
+    const batch=writeBatch(db);
+    testJobs.forEach(j=>batch.delete(doc(db,'jobs',j.docId)));
+    await batch.commit();
+    msg.style.color='#065F46';
+    msg.textContent=`✓ Deleted ${testJobs.length} test job${testJobs.length>1?'s':''}.`;
+  }catch(e){
+    msg.style.color='#991B1B';
+    msg.textContent='Error: '+e.message;
+  }
+};
+
 window.migrateHemsaw=async function(){
   const msg=document.getElementById('migrate-msg');
   const allJobs=jobs.filter(j=>j.saw==='Hemsaw');
@@ -1185,8 +1213,6 @@ function renderArchive(){
 
   let archived = jobs.filter(j=>{
     if(j.status!=='done') return false;
-    // Include jobs without completedAt (completed before timestamp tracking was added)
-    if(j.completedAt && j.completedAt < twelveMonthsAgo) return false;
     if(sawFilter && j.saw!==sawFilter) return false;
     if(fromTs && j.completedAt && j.completedAt < fromTs) return false;
     if(toTs && j.completedAt && j.completedAt > toTs) return false;
@@ -1195,7 +1221,7 @@ function renderArchive(){
       if(!haystack.includes(search)) return false;
     }
     return true;
-  }).sort((a,b)=>(b.completedAt||0)-(a.completedAt||0));
+  }).sort((a,b)=>(b.completedAt||b.added||0)-(a.completedAt||a.added||0));
 
   document.getElementById('archive-count').textContent = `${archived.length} record${archived.length!==1?'s':''}`;
 
