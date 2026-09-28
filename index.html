@@ -164,7 +164,6 @@
 <body>
 <div class="app">
   <h1>⚙️ Saw Cutting Backlog</h1>
-  <div id="firebase-debug" style="font-size:11px;color:#999;margin-bottom:8px;padding:4px 8px;background:#f5f5f5;border-radius:4px;">Connecting to Firebase...</div>
 
   <!-- Desktop tab bar -->
   <div class="tab-bar" id="desktop-tabs">
@@ -214,8 +213,8 @@
       </div>
       <div style="overflow-x:auto;">
         <table class="job-table">
-          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:75px"><col style="width:90px"><col style="width:60px"><col style="width:55px"><col style="width:72px"><col style="width:55px"></colgroup>
-          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Part #</th><th>Qty</th><th>Due</th><th>Progress</th><th>Status</th><th>Est. Time</th><th>Clock</th><th>Risk</th></tr></thead>
+          <colgroup><col style="width:14px"><col style="width:78px"><col style="width:72px"><col style="width:90px"><col style="width:82px"><col style="width:38px"><col style="width:75px"><col style="width:70px"><col style="width:60px"><col style="width:55px"><col style="width:72px"><col style="width:55px"></colgroup>
+          <thead><tr><th></th><th>Order #</th><th>Saw</th><th>Customer</th><th>Part #</th><th>Qty</th><th>Due</th><th>Ship Via</th><th>Status</th><th>Est. Time</th><th>Clock</th><th>Risk</th></tr></thead>
           <tbody id="dash-jobs"></tbody>
         </table>
       </div>
@@ -278,6 +277,12 @@
               <option value="__custom_op__">Other (type below)</option>
             </select>
             <input type="text" id="f-operator-custom" placeholder="Enter initials" style="display:none;margin-top:6px;">
+          </div>
+          <div>
+            <label>Ship Via</label>
+            <select id="f-via">
+              <option value="">Select...</option>
+            </select>
           </div>
           <div class="span2"><label>Special instructions</label><input type="text" id="f-notes" placeholder="Tolerance, finish, hold for inspection, etc."></div>
           <div class="span2">
@@ -385,16 +390,38 @@
 
       <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
         <div style="font-weight:600;font-size:13px;margin-bottom:4px;">⚙️ Rename Hemsaw → Amada</div>
-        <div style="font-size:12px;color:#666;margin-bottom:12px;">Updates all existing jobs in Firebase that are assigned to "Hemsaw" to use the new name "Amada". This is a one-time action — existing completed jobs in the archive will also be updated.</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">Updates all existing jobs in Firebase that are assigned to "Hemsaw" to use the new name "Amada".</div>
         <button class="btn" style="background:#B45309;color:#fff;border-color:#B45309;font-size:13px;" onclick="window.migrateHemsaw()">Run migration</button>
         <div id="migrate-msg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
       </div>
 
       <div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
         <div style="font-weight:600;font-size:13px;margin-bottom:4px;">🗑 Remove test jobs</div>
-        <div style="font-size:12px;color:#666;margin-bottom:12px;">Removes the two test jobs with order numbers "123" and "1234" from Firebase permanently.</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">Removes test jobs with order numbers "123" and "1234" permanently.</div>
         <button class="btn" style="background:#991B1B;color:#fff;border-color:#991B1B;font-size:13px;" onclick="window.deleteTestJobs()">Delete test jobs</button>
         <div id="delete-test-msg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
+      </div>
+
+      <div style="background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">🚚 Ship Via options</div>
+        <div style="font-size:12px;color:#666;margin-bottom:10px;">Manage the shipping options available in the job form and dashboard.</div>
+        <div id="via-list"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <input type="text" id="new-via" placeholder="Add new option (e.g. FedEx)" style="max-width:200px;font-size:13px;">
+          <button class="btn btn-primary" onclick="window.addViaOption()">Add</button>
+        </div>
+        <div id="via-msg" style="font-size:12px;margin-top:6px;min-height:14px;"></div>
+      </div>
+
+      <div style="background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:4px;">👷 Operator initials</div>
+        <div style="font-size:12px;color:#666;margin-bottom:10px;">Manage the operator initials available in the job form.</div>
+        <div id="op-list"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <input type="text" id="new-op" placeholder="Add initials (e.g. JD)" style="max-width:150px;font-size:13px;">
+          <button class="btn btn-primary" onclick="window.addOperator()">Add</button>
+        </div>
+        <div id="op-msg" style="font-size:12px;margin-top:6px;min-height:14px;"></div>
       </div>
     </div>
   </div>
@@ -424,6 +451,11 @@ const jobsRef = collection(db, 'jobs');
 
 const SAWS = ['Coldsaw','Hyd-Mech','Amada','Chop saw'];
 const SAWS_ALL = ['Unassigned','Coldsaw','Hyd-Mech','Amada','Chop saw'];
+let VIA_OPTIONS = ['BT','LTL','UPS'];
+
+function getViaOptions(selected){
+  return ['', ...VIA_OPTIONS].map(v=>`<option value="${v}" ${v===(selected||'')?'selected':''}>${v||'Select...'}</option>`).join('');
+}
 const MAX_MIN = 480;
 const PROG_OPTS = [0,25,50,75,100];
 let jobs = [];
@@ -656,7 +688,11 @@ function renderDashboard(){
       <td>${j.material}${j.length?' · '+j.length:''}</td>
       <td>${j.qty||'—'}</td>
       <td style="white-space:nowrap;">${dueCellContent}</td>
-      <td>${progBar(j.pct||0)}</td>
+      <td>
+        <select style="font-size:11px;padding:2px 5px;border:1px solid #e0e0e0;border-radius:4px;" onchange="window.updateField('${j.docId}','via',this.value)">
+          ${getViaOptions(j.via)}
+        </select>
+      </td>
       <td>${statusBadge(j.status)}</td>
       <td style="font-size:11px;color:#666;">${j.time?Math.round(j.time)+' min':'—'}</td>
       <td>${clockDisplay}</td>
@@ -765,7 +801,7 @@ function renderOperator(){
             <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
               ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
             </select>
-            <div style="flex:1;">${progBar(pct)}</div>
+            <div id="op-prog-${j.docId}" style="flex:1;display:flex;align-items:center;gap:6px;">${progBar(pct)}</div>
           </div>
         </div>`;
     };
@@ -915,7 +951,13 @@ function renderHistory(){
   </table>`;
 }
 
-function renderAll(){renderDashboard();renderOperator();renderHistory();renderArchive();}
+function renderAll(){renderDashboard();renderOperator();renderHistory();renderArchive();
+  // Keep form dropdowns in sync
+  const fVia=document.getElementById('f-via');
+  if(fVia&&fVia.options.length<=1) fVia.innerHTML='<option value="">Select...</option>'+VIA_OPTIONS.map(v=>`<option value="${v}">${v}</option>`).join('');
+  const fOp=document.getElementById('f-operator');
+  if(fOp&&!fOp.querySelector('option[value="__custom_op__"]')) fOp.innerHTML='<option value="">Select...</option>'+OPERATOR_OPTIONS.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__custom_op__">Other (type below)</option>';
+}
 
 // Detect mobile and show/hide nav bars
 function checkMobile(){
@@ -946,6 +988,7 @@ window.showTab=function(t,e){
   else if(t==='operator')renderOperator();
   else if(t==='history')renderHistory();
   else if(t==='archive')renderArchive();
+  else if(t==='admin')renderAdmin();
   window.scrollTo(0,0);
 };
 
@@ -1097,6 +1140,7 @@ window.addJob=async function(){
   const salesperson=spSel==='__custom_sp__'?document.getElementById('f-salesperson-custom').value.trim():spSel;
   const opSel=document.getElementById('f-operator').value;
   const operator=opSel==='__custom_op__'?document.getElementById('f-operator-custom').value.trim():opSel;
+  const via=document.getElementById('f-via')?.value||'';
   const msg=document.getElementById('form-msg');
   if(!order||!customer){
     msg.style.color='#991B1B';
@@ -1109,7 +1153,7 @@ window.addJob=async function(){
     msg.textContent='Please add at least one cut line.';
     return;
   }
-  const orderData={orderKey:order,order,customer,due,notes,rush,risk,salesperson,operator,isMultiLine:lines.length>1};
+  const orderData={orderKey:order,order,customer,due,notes,rush,risk,salesperson,operator,via,isMultiLine:lines.length>1};
   try{
     const batch=writeBatch(db);
     const now=Date.now();
@@ -1130,6 +1174,69 @@ window.addJob=async function(){
     msg.textContent='Error saving — '+err.message;
   }
 };
+
+// ── OPERATOR INITIALS ─────────────────────────────────────
+let OPERATOR_OPTIONS = ['EG','MM','ELG'];
+
+function renderAdmin(){
+  // Via list
+  const viaList=document.getElementById('via-list');
+  if(viaList) viaList.innerHTML=VIA_OPTIONS.map((v,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="flex:1;font-size:13px;">${v}</span>
+      <button class="btn btn-danger" style="font-size:11px;padding:2px 8px;" onclick="window.removeViaOption(${i})">Remove</button>
+    </div>`).join('');
+  // Operator list
+  const opList=document.getElementById('op-list');
+  if(opList) opList.innerHTML=OPERATOR_OPTIONS.map((o,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="flex:1;font-size:13px;font-weight:500;">${o}</span>
+      <button class="btn btn-danger" style="font-size:11px;padding:2px 8px;" onclick="window.removeOperator(${i})">Remove</button>
+    </div>`).join('');
+  // Refresh via dropdown in form
+  const fVia=document.getElementById('f-via');
+  if(fVia) fVia.innerHTML='<option value="">Select...</option>'+VIA_OPTIONS.map(v=>`<option value="${v}">${v}</option>`).join('');
+  // Refresh operator dropdown in form
+  const fOp=document.getElementById('f-operator');
+  if(fOp) fOp.innerHTML='<option value="">Select...</option>'+OPERATOR_OPTIONS.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__custom_op__">Other (type below)</option>';
+}
+
+window.addViaOption=function(){
+  const input=document.getElementById('new-via');
+  const msg=document.getElementById('via-msg');
+  const val=input.value.trim().toUpperCase();
+  if(!val){msg.style.color='#991B1B';msg.textContent='Please enter a value.';return;}
+  if(VIA_OPTIONS.includes(val)){msg.style.color='#991B1B';msg.textContent='Already exists.';return;}
+  VIA_OPTIONS.push(val);
+  input.value='';
+  msg.style.color='#065F46';msg.textContent=`✓ ${val} added!`;
+  setTimeout(()=>msg.textContent='',2000);
+  renderAdmin();
+};
+
+window.removeViaOption=function(i){
+  VIA_OPTIONS.splice(i,1);
+  renderAdmin();
+};
+
+window.addOperator=function(){
+  const input=document.getElementById('new-op');
+  const msg=document.getElementById('op-msg');
+  const val=input.value.trim().toUpperCase();
+  if(!val){msg.style.color='#991B1B';msg.textContent='Please enter initials.';return;}
+  if(OPERATOR_OPTIONS.includes(val)){msg.style.color='#991B1B';msg.textContent='Already exists.';return;}
+  OPERATOR_OPTIONS.push(val);
+  input.value='';
+  msg.style.color='#065F46';msg.textContent=`✓ ${val} added!`;
+  setTimeout(()=>msg.textContent='',2000);
+  renderAdmin();
+};
+
+window.removeOperator=function(i){
+  OPERATOR_OPTIONS.splice(i,1);
+  renderAdmin();
+};
+// ── END ADMIN ─────────────────────────────────────────────
 
 window.deleteTestJobs=async function(){
   const msg=document.getElementById('delete-test-msg');
@@ -1290,7 +1397,6 @@ function tickTimer(docId){
       return a+(l.timerElapsed||0);
     },0);
     orderTimerEl.textContent=formatTimer(total);
-    // Also update collapsed order timer
     const collapsedOrder=document.getElementById('collapsed-timer-'+orderKey);
     if(collapsedOrder) collapsedOrder.textContent='● '+formatTimer(total);
   }
@@ -1545,9 +1651,6 @@ const q = query(jobsRef);
 onSnapshot(q, (snapshot) => {
   jobs = snapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
   jobs.sort((a,b)=>(a.added||0)-(b.added||0));
-  // Debug counter — shows total jobs loaded from Firebase
-  const dbg=document.getElementById('firebase-debug');
-  if(dbg) dbg.textContent=`Firebase: ${jobs.length} total jobs loaded (${jobs.filter(j=>j.status==='done').length} done, ${jobs.filter(j=>j.status!=='done').length} active)`;
   if(!isEditing) renderAll();
   resumeRunningTimers();
 });
