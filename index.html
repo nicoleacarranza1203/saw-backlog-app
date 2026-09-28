@@ -835,6 +835,7 @@ function renderOperator(){
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Qty</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Length</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Est.</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Operator</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Timer</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Progress</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Status</th>
@@ -844,6 +845,7 @@ function renderOperator(){
               ${lines.map((j,li)=>{
                 const pct=j.pct||0;
                 const sawOpts=SAWS_ALL.map(s=>`<option value="${s}" ${j.saw===s?'selected':''}>${s}</option>`).join('');
+                const opOpts=['', ...OPERATOR_OPTIONS].map(o=>`<option value="${o}" ${j.operator===o?'selected':''}>${o||'—'}</option>`).join('');
                 return `<tr style="border-bottom:1px solid #f0f0f0;${j.status==='done'?'opacity:0.6':''}">
                   <td style="padding:6px 8px;font-weight:500;color:#666;">L${j.lineNum||li+1}</td>
                   <td style="padding:4px 6px;"><select onchange="window.updateField('${j.docId}','saw',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;">${sawOpts}</select></td>
@@ -851,6 +853,11 @@ function renderOperator(){
                   <td style="padding:4px 6px;"><input type="text" value="${j.qty||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','qty',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;width:60px;"></td>
                   <td style="padding:4px 6px;"><input type="text" value="${j.length||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','length',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;width:60px;"></td>
                   <td style="padding:6px 8px;white-space:nowrap;">${j.time?j.time+' min':'—'}</td>
+                  <td style="padding:4px 6px;">
+                    <select onchange="window.updateField('${j.docId}','operator',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;">
+                      ${opOpts}
+                    </select>
+                  </td>
                   <td style="padding:4px 6px;">
                     <div style="display:flex;align-items:center;gap:4px;">
                       <span id="timer-display-${j.docId}" style="font-size:11px;font-variant-numeric:tabular-nums;min-width:56px;font-weight:500;${j.timerRunning?'color:#065F46':'color:#999'}">${formatTimer(j.timerElapsed||0)}</span>
