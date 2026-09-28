@@ -430,7 +430,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, writeBatch, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // =============================================
 // PASTE YOUR FIREBASE CONFIG HERE
@@ -448,6 +448,26 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 const jobsRef = collection(db, 'jobs');
+const sawSettingsRef = doc(db, 'saw_settings', 'config');
+
+// Load saved Via and Operator options from Firebase
+async function loadSawSettings(){
+  try{
+    const snap = await getDoc(sawSettingsRef);
+    if(snap.exists()){
+      const data = snap.data();
+      if(data.viaOptions && data.viaOptions.length) VIA_OPTIONS = data.viaOptions;
+      if(data.operatorOptions && data.operatorOptions.length) OPERATOR_OPTIONS = data.operatorOptions;
+    }
+  } catch(e){ console.log('Settings load:', e); }
+  renderAdmin();
+}
+
+async function saveSawSettings(){
+  try{
+    await setDoc(sawSettingsRef, { viaOptions: VIA_OPTIONS, operatorOptions: OPERATOR_OPTIONS });
+  } catch(e){ console.error('Settings save:', e); }
+}
 
 const SAWS = ['Coldsaw','Hyd-Mech','Amada','Chop saw'];
 const SAWS_ALL = ['Unassigned','Coldsaw','Hyd-Mech','Amada','Chop saw'];
@@ -1210,39 +1230,43 @@ function renderAdmin(){
   if(fOp) fOp.innerHTML='<option value="">Select...</option>'+OPERATOR_OPTIONS.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__custom_op__">Other (type below)</option>';
 }
 
-window.addViaOption=function(){
+window.addViaOption=async function(){
   const input=document.getElementById('new-via');
   const msg=document.getElementById('via-msg');
   const val=input.value.trim().toUpperCase();
   if(!val){msg.style.color='#991B1B';msg.textContent='Please enter a value.';return;}
   if(VIA_OPTIONS.includes(val)){msg.style.color='#991B1B';msg.textContent='Already exists.';return;}
   VIA_OPTIONS.push(val);
+  await saveSawSettings();
   input.value='';
   msg.style.color='#065F46';msg.textContent=`✓ ${val} added!`;
   setTimeout(()=>msg.textContent='',2000);
   renderAdmin();
 };
 
-window.removeViaOption=function(i){
+window.removeViaOption=async function(i){
   VIA_OPTIONS.splice(i,1);
+  await saveSawSettings();
   renderAdmin();
 };
 
-window.addOperator=function(){
+window.addOperator=async function(){
   const input=document.getElementById('new-op');
   const msg=document.getElementById('op-msg');
   const val=input.value.trim().toUpperCase();
   if(!val){msg.style.color='#991B1B';msg.textContent='Please enter initials.';return;}
   if(OPERATOR_OPTIONS.includes(val)){msg.style.color='#991B1B';msg.textContent='Already exists.';return;}
   OPERATOR_OPTIONS.push(val);
+  await saveSawSettings();
   input.value='';
   msg.style.color='#065F46';msg.textContent=`✓ ${val} added!`;
   setTimeout(()=>msg.textContent='',2000);
   renderAdmin();
 };
 
-window.removeOperator=function(i){
+window.removeOperator=async function(i){
   OPERATOR_OPTIONS.splice(i,1);
+  await saveSawSettings();
   renderAdmin();
 };
 // ── END ADMIN ─────────────────────────────────────────────
@@ -1663,6 +1687,9 @@ onSnapshot(q, (snapshot) => {
   if(!isEditing) renderAll();
   resumeRunningTimers();
 });
+
+// Load saved settings (Via options, Operator initials)
+loadSawSettings();
 </script>
 </body>
 </html>
