@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -461,6 +460,7 @@ async function loadSawSettings(){
     }
   } catch(e){ console.log('Settings load:', e); }
   renderAdmin();
+  refreshFormDropdowns();
 }
 
 async function saveSawSettings(){
@@ -480,6 +480,7 @@ const MAX_MIN = 480;
 const PROG_OPTS = [0,25,50,75,100];
 let jobs = [];
 let opSawFilter = 'all';
+const pullTimerIntervals = {};
 const expandedCards = new Set();
 
 window.toggleAddForm=function(){
@@ -817,13 +818,7 @@ function renderOperator(){
               <button class="btn btn-danger" style="font-size:11px;padding:3px 8px;" onclick="window.removeJob('${j.docId}')">Remove</button>
             </div>
           </div>
-          <div class="progress-row">
-            <span class="progress-label">% Complete:</span>
-            <select class="prog-select" onchange="window.setPct('${j.docId}',this.value)" style="border-color:${color};color:${pct>0?color:'#666'};font-weight:${pct>0?'500':'400'};">
-              ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
-            </select>
-            <div id="op-prog-${j.docId}" style="flex:1;display:flex;align-items:center;gap:6px;">${progBar(pct)}</div>
-          </div>
+
         </div>`;
     };
 
@@ -840,9 +835,19 @@ function renderOperator(){
           <div><label style="font-size:11px;color:#999;">Ship Via</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateOrderField('${orderKey}','via',this.value)" style="font-size:12px;padding:5px 8px;"><option value="">Select...</option>${VIA_OPTIONS.map(v=>`<option value="${v}" ${first.via===v?'selected':''}>${v}</option>`).join('')}</select></div>
         </div>
         <!-- Combined timer -->
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0faf6;border-radius:8px;margin-bottom:12px;flex-wrap:wrap;">
-          <span style="font-size:11px;color:#065F46;font-weight:500;">Order total:</span>
-          <span id="order-timer-${orderKey}" style="font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;color:#065F46;">${formatTimer(totalElapsed)}</span>
+        <div style="display:flex;align-items:center;gap:16px;padding:8px 12px;background:#f0faf6;border-radius:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#C2410C;font-weight:500;">🔧 Pull:</span>
+            <span style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#C2410C;">${formatTimer(lines.reduce((a,l)=>{if(l.pullRunning)return a+(l.pullElapsed||0)+(Date.now()-(l.pullStart||Date.now()));return a+(l.pullElapsed||0);},0))}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#1E40AF;font-weight:500;">⚙️ Saw:</span>
+            <span style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;color:#1E40AF;">${formatTimer(totalElapsed)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:#065F46;font-weight:500;">Total:</span>
+            <span id="order-timer-${orderKey}" style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:#065F46;">${formatTimer(totalElapsed+lines.reduce((a,l)=>a+(l.pullElapsed||0),0))}</span>
+          </div>
           <span style="font-size:11px;color:#999;margin-left:auto;">${linesDone}/${lines.length} lines complete</span>
         </div>
         <!-- Lines sub-table -->
@@ -856,8 +861,10 @@ function renderOperator(){
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Length</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Est.</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Operator</th>
-              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Timer</th>
-              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Progress</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;background:#FFF7ED;color:#C2410C;">🔧 Pull Time</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;background:#EFF6FF;color:#1E40AF;">⚙️ Saw Time</th>
+              <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;background:#F0FDF4;color:#065F46;">Total</th>
+
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;">Status</th>
               <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e5e5;"></th>
             </tr></thead>
@@ -878,20 +885,28 @@ function renderOperator(){
                       ${opOpts}
                     </select>
                   </td>
-                  <td style="padding:4px 6px;">
-                    <div style="display:flex;align-items:center;gap:4px;">
-                      <span id="timer-display-${j.docId}" style="font-size:11px;font-variant-numeric:tabular-nums;min-width:56px;font-weight:500;${j.timerRunning?'color:#065F46':'color:#999'}">${formatTimer(j.timerElapsed||0)}</span>
-                      <button id="timer-start-${j.docId}" style="font-size:11px;padding:2px 6px;border:1px solid #065F46;background:#065F46;color:#fff;border-radius:4px;cursor:pointer;${j.timerRunning?'display:none':''}" onclick="window.startTimer('${j.docId}')">▶</button>
-                      <button id="timer-pause-${j.docId}" style="font-size:11px;padding:2px 6px;border:1px solid #B45309;background:#B45309;color:#fff;border-radius:4px;cursor:pointer;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸</button>
+                  <!-- PULL TIMER -->
+                  <td style="padding:4px 6px;background:#FFFBEB;">
+                    <div style="display:flex;align-items:center;gap:3px;">
+                      <span id="pull-display-${j.docId}" style="font-size:11px;font-variant-numeric:tabular-nums;min-width:48px;font-weight:500;color:${j.pullRunning?'#C2410C':'#999'}">${formatTimer(j.pullElapsed||0)}</span>
+                      <button id="pull-start-${j.docId}" style="font-size:10px;padding:2px 5px;border:1px solid #C2410C;background:#C2410C;color:#fff;border-radius:4px;cursor:pointer;${j.pullRunning?'display:none':''}" onclick="window.startPullTimer('${j.docId}')">▶</button>
+                      <button id="pull-pause-${j.docId}" style="font-size:10px;padding:2px 5px;border:1px solid #B45309;background:#B45309;color:#fff;border-radius:4px;cursor:pointer;${j.pullRunning?'':'display:none'}" onclick="window.pausePullTimer('${j.docId}')">⏸</button>
+                      <button style="font-size:10px;padding:2px 4px;border:1px solid #d0d0d0;background:#fff;border-radius:4px;cursor:pointer;" onclick="window.resetPullTimer('${j.docId}')">↺</button>
                     </div>
                   </td>
-                  <td style="padding:4px 6px;min-width:80px;">
-                    <div style="display:flex;align-items:center;gap:4px;">
-                      <select onchange="window.setPct('${j.docId}',this.value)" style="font-size:11px;padding:2px 5px;border:1px solid #d0d0d0;border-radius:4px;">
-                        ${PROG_OPTS.map(v=>`<option value="${v}" ${v===pct?'selected':''}>${v}%</option>`).join('')}
-                      </select>
+                  <!-- SAW TIMER -->
+                  <td style="padding:4px 6px;background:#EFF6FF;">
+                    <div style="display:flex;align-items:center;gap:3px;">
+                      <span id="timer-display-${j.docId}" style="font-size:11px;font-variant-numeric:tabular-nums;min-width:48px;font-weight:500;${j.timerRunning?'color:#1E40AF':'color:#999'}">${formatTimer(j.timerElapsed||0)}</span>
+                      <button id="timer-start-${j.docId}" style="font-size:10px;padding:2px 5px;border:1px solid #1E40AF;background:#1E40AF;color:#fff;border-radius:4px;cursor:pointer;${j.timerRunning?'display:none':''}" onclick="window.startTimer('${j.docId}')">▶</button>
+                      <button id="timer-pause-${j.docId}" style="font-size:10px;padding:2px 5px;border:1px solid #B45309;background:#B45309;color:#fff;border-radius:4px;cursor:pointer;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸</button>
                     </div>
                   </td>
+                  <!-- TOTAL -->
+                  <td style="padding:4px 6px;background:#F0FDF4;">
+                    <span id="total-display-${j.docId}" style="font-size:11px;font-weight:600;color:#065F46;font-variant-numeric:tabular-nums;">${formatTimer((j.pullElapsed||0)+(j.timerElapsed||0))}</span>
+                  </td>
+
                   <td style="padding:4px 6px;">${statusBadge(j.status)}</td>
                   <td style="padding:4px 6px;">
                     ${j.status!=='done'
@@ -981,11 +996,8 @@ function renderHistory(){
 }
 
 function renderAll(){renderDashboard();renderOperator();renderHistory();renderArchive();
-  // Keep form dropdowns in sync
-  const fVia=document.getElementById('f-via');
-  if(fVia&&fVia.options.length<=1) fVia.innerHTML='<option value="">Select...</option>'+VIA_OPTIONS.map(v=>`<option value="${v}">${v}</option>`).join('');
-  const fOp=document.getElementById('f-operator');
-  if(fOp&&!fOp.querySelector('option[value="__custom_op__"]')) fOp.innerHTML='<option value="">Select...</option>'+OPERATOR_OPTIONS.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__custom_op__">Other (type below)</option>';
+  // Always refresh form dropdowns with latest options
+  refreshFormDropdowns();
 }
 
 // Detect mobile and show/hide nav bars
@@ -1079,7 +1091,15 @@ window.completeJob=async function(docId){
     clearInterval(timerIntervals[docId]);
     delete timerIntervals[docId];
   }
-  await updateDoc(doc(db,'jobs',docId),{status:'done',pct:100,completedAt:Date.now(),timerRunning:false,timerElapsed:actualTime,actualTime});
+  // Stop pull timer too if running
+  let pullActual=j.pullElapsed||0;
+  if(j.pullRunning){
+    pullActual=(j.pullElapsed||0)+(Date.now()-(j.pullStart||Date.now()));
+    clearInterval(pullTimerIntervals[docId]);
+    delete pullTimerIntervals[docId];
+  }
+  const combinedActual=actualTime+pullActual;
+  await updateDoc(doc(db,'jobs',docId),{status:'done',pct:100,completedAt:Date.now(),timerRunning:false,timerElapsed:actualTime,actualTime,pullRunning:false,pullElapsed:pullActual,pullActual,combinedActual});
   // Check if all lines of this order are now done
   const orderKey=j.orderKey||j.order;
   const orderLines=jobs.filter(l=>(l.orderKey||l.order)===orderKey);
@@ -1207,6 +1227,21 @@ window.addJob=async function(){
 // ── OPERATOR INITIALS ─────────────────────────────────────
 let OPERATOR_OPTIONS = ['EG','MM','ELG'];
 
+function refreshFormDropdowns(){
+  const fVia=document.getElementById('f-via');
+  if(fVia){
+    const curVia=fVia.value;
+    fVia.innerHTML='<option value="">Select...</option>'+VIA_OPTIONS.map(v=>`<option value="${v}">${v}</option>`).join('');
+    if(curVia) fVia.value=curVia;
+  }
+  const fOp=document.getElementById('f-operator');
+  if(fOp){
+    const curOp=fOp.value;
+    fOp.innerHTML='<option value="">Select...</option>'+OPERATOR_OPTIONS.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__custom_op__">Other (type below)</option>';
+    if(curOp) fOp.value=curOp;
+  }
+}
+
 function renderAdmin(){
   // Via list
   const viaList=document.getElementById('via-list');
@@ -1222,12 +1257,8 @@ function renderAdmin(){
       <span style="flex:1;font-size:13px;font-weight:500;">${o}</span>
       <button class="btn btn-danger" style="font-size:11px;padding:2px 8px;" onclick="window.removeOperator(${i})">Remove</button>
     </div>`).join('');
-  // Refresh via dropdown in form
-  const fVia=document.getElementById('f-via');
-  if(fVia) fVia.innerHTML='<option value="">Select...</option>'+VIA_OPTIONS.map(v=>`<option value="${v}">${v}</option>`).join('');
-  // Refresh operator dropdown in form
-  const fOp=document.getElementById('f-operator');
-  if(fOp) fOp.innerHTML='<option value="">Select...</option>'+OPERATOR_OPTIONS.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__custom_op__">Other (type below)</option>';
+  // Refresh form dropdowns
+  refreshFormDropdowns();
 }
 
 window.addViaOption=async function(){
@@ -1420,6 +1451,10 @@ function tickTimer(docId){
   // Update dashboard clock column
   const dashClock=document.getElementById('dash-clock-'+docId);
   if(dashClock) dashClock.textContent='● '+formatted;
+  // Update total display (saw + pull)
+  const pullElapsed=j.pullRunning?(j.pullElapsed||0)+(now-(j.pullStart||now)):(j.pullElapsed||0);
+  const totalDisp=document.getElementById('total-display-'+docId);
+  if(totalDisp) totalDisp.textContent=formatTimer(elapsed+pullElapsed);
   // Update order-level total timer
   const orderKey=j.orderKey||j.order;
   const orderTimerEl=document.getElementById('order-timer-'+orderKey);
@@ -1434,6 +1469,49 @@ function tickTimer(docId){
     if(collapsedOrder) collapsedOrder.textContent='● '+formatTimer(total);
   }
 }
+
+// ── PULL TIMER ────────────────────────────────────────────
+window.startPullTimer=async function(docId){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j)return;
+  if(j.pullRunning)return;
+  await updateDoc(doc(db,'jobs',docId),{pullRunning:true,pullStart:Date.now()});
+  // Start ticking
+  if(!pullTimerIntervals[docId]){
+    pullTimerIntervals[docId]=setInterval(()=>tickPullTimer(docId),1000);
+  }
+};
+
+window.pausePullTimer=async function(docId){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j||!j.pullRunning)return;
+  const now=Date.now();
+  const elapsed=(j.pullElapsed||0)+(now-(j.pullStart||now));
+  clearInterval(pullTimerIntervals[docId]);
+  delete pullTimerIntervals[docId];
+  await updateDoc(doc(db,'jobs',docId),{pullRunning:false,pullElapsed:elapsed,pullStart:null});
+};
+
+window.resetPullTimer=async function(docId){
+  clearInterval(pullTimerIntervals[docId]);
+  delete pullTimerIntervals[docId];
+  await updateDoc(doc(db,'jobs',docId),{pullRunning:false,pullElapsed:0,pullStart:null});
+};
+
+function tickPullTimer(docId){
+  const j=jobs.find(j=>j.docId===docId);
+  if(!j||!j.pullRunning)return;
+  const now=Date.now();
+  const elapsed=(j.pullElapsed||0)+(now-(j.pullStart||now));
+  // Update pull display
+  const pd=document.getElementById('pull-display-'+docId);
+  if(pd){pd.textContent=formatTimer(elapsed);pd.style.color='#C2410C';}
+  // Update total display
+  const sawElapsed=j.timerRunning?(j.timerElapsed||0)+(now-(j.timerStart||now)):(j.timerElapsed||0);
+  const td=document.getElementById('total-display-'+docId);
+  if(td)td.textContent=formatTimer(elapsed+sawElapsed);
+}
+// ── END PULL TIMER ─────────────────────────────────────────
 
 window.startTimer=async function(docId){
   const j=jobs.find(j=>j.docId===docId);
@@ -1478,6 +1556,9 @@ function resumeRunningTimers(){
   jobs.forEach(j=>{
     if(j.timerRunning && j.docId && !timerIntervals[j.docId]){
       timerIntervals[j.docId]=setInterval(()=>tickTimer(j.docId),1000);
+    }
+    if(j.pullRunning && j.docId && !pullTimerIntervals[j.docId]){
+      pullTimerIntervals[j.docId]=setInterval(()=>tickPullTimer(j.docId),1000);
     }
   });
 }
