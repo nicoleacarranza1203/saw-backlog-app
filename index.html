@@ -778,7 +778,7 @@ function renderOperator(){
       const color=pct===0?'#ccc':pct<50?'#BA7517':pct<100?'#1D9E75':'#1D9E75';
       const sawOpts=SAWS_ALL.map(s=>`<option value="${s}" ${j.saw===s?'selected':''}>${s}</option>`).join('');
       const spOpts=['','NC','HM','MT','MR','IC','HK','TD','TS'].map(s=>`<option value="${s}" ${j.salesperson===s?'selected':''}>${s||'Select...'}</option>`).join('');
-      const opOpts=['','EG','MM','ELG'].map(s=>`<option value="${s}" ${j.operator===s?'selected':''}>${s||'Select...'}</option>`).join('');
+      const opOpts=['', ...OPERATOR_OPTIONS].map(s=>`<option value="${s}" ${j.operator===s?'selected':''}>${s||'Select...'}</option>`).join('');
       const riskOpts=['','Low','Medium','High'].map(s=>`<option value="${s}" ${j.risk===s?'selected':''}>${s||'Select...'}</option>`).join('');
       return `
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #ebebeb;">
@@ -797,14 +797,32 @@ function renderOperator(){
             <div><label style="font-size:11px;color:#999;">Ship Via</label><select onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','via',this.value)" style="font-size:12px;padding:5px 8px;"><option value="">Select...</option>${VIA_OPTIONS.map(v=>`<option value="${v}" ${j.via===v?'selected':''}>${v}</option>`).join('')}</select></div>
             <div><label style="font-size:11px;color:#999;">Special instructions</label><input type="text" value="${j.notes||''}" onfocus="window.setEditingTrue()" onblur="window.setEditingFalse()" onchange="window.updateField('${j.docId}','notes',this.value)" style="font-size:12px;padding:5px 8px;"></div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f9f9f9;border-radius:8px;margin-bottom:10px;flex-wrap:wrap;">
-            <span style="font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;min-width:72px;" id="timer-display-${j.docId}">${formatTimer(j.timerElapsed||0)}</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button class="btn" id="timer-start-${j.docId}" style="font-size:12px;padding:5px 12px;background:#065F46;color:#fff;border-color:#065F46;${j.timerRunning?'display:none':''}" onclick="window.startTimer('${j.docId}')">▶ Start</button>
-              <button class="btn" id="timer-pause-${j.docId}" style="font-size:12px;padding:5px 12px;background:#B45309;color:#fff;border-color:#B45309;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸ Pause</button>
-              <button class="btn" id="timer-reset-${j.docId}" style="font-size:12px;padding:5px 12px;" onclick="window.resetTimer('${j.docId}')">↺ Reset</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <!-- Pull Timer -->
+            <div style="flex:1;min-width:160px;padding:10px 12px;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;">
+              <div style="font-size:11px;color:#C2410C;font-weight:600;margin-bottom:6px;">🔧 Pull Time</div>
+              <span style="font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:${j.pullRunning?'#C2410C':'#999'};" id="pull-display-${j.docId}">${formatTimer(j.pullElapsed||0)}</span>
+              <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                <button class="btn" id="pull-start-${j.docId}" style="font-size:11px;padding:4px 10px;background:#C2410C;color:#fff;border-color:#C2410C;${j.pullRunning?'display:none':''}" onclick="window.startPullTimer('${j.docId}')">▶ Start</button>
+                <button class="btn" id="pull-pause-${j.docId}" style="font-size:11px;padding:4px 10px;background:#B45309;color:#fff;border-color:#B45309;${j.pullRunning?'':'display:none'}" onclick="window.pausePullTimer('${j.docId}')">⏸ Pause</button>
+                <button class="btn" style="font-size:11px;padding:4px 10px;" onclick="window.resetPullTimer('${j.docId}')">↺ Reset</button>
+              </div>
             </div>
-            ${j.timerRunning?`<span style="font-size:11px;color:#065F46;font-weight:500;">● Running</span>`:(j.timerElapsed>0?`<span style="font-size:11px;color:#999;">Paused</span>`:'')}
+            <!-- Saw Timer -->
+            <div style="flex:1;min-width:160px;padding:10px 12px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;">
+              <div style="font-size:11px;color:#1E40AF;font-weight:600;margin-bottom:6px;">⚙️ Saw Time</div>
+              <span style="font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:${j.timerRunning?'#1E40AF':'#999'};" id="timer-display-${j.docId}">${formatTimer(j.timerElapsed||0)}</span>
+              <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                <button class="btn" id="timer-start-${j.docId}" style="font-size:11px;padding:4px 10px;background:#1E40AF;color:#fff;border-color:#1E40AF;${j.timerRunning?'display:none':''}" onclick="window.startTimer('${j.docId}')">▶ Start</button>
+                <button class="btn" id="timer-pause-${j.docId}" style="font-size:11px;padding:4px 10px;background:#B45309;color:#fff;border-color:#B45309;${j.timerRunning?'':'display:none'}" onclick="window.pauseTimer('${j.docId}')">⏸ Pause</button>
+                <button class="btn" id="timer-reset-${j.docId}" style="font-size:11px;padding:4px 10px;" onclick="window.resetTimer('${j.docId}')">↺ Reset</button>
+              </div>
+            </div>
+            <!-- Total -->
+            <div style="min-width:120px;padding:10px 12px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;display:flex;flex-direction:column;justify-content:center;">
+              <div style="font-size:11px;color:#065F46;font-weight:600;margin-bottom:6px;">Total</div>
+              <span id="total-display-${j.docId}" style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:#065F46;">${formatTimer((j.pullElapsed||0)+(j.timerElapsed||0))}</span>
+            </div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
             <div class="status-btns">
